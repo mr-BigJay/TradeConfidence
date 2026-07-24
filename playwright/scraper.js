@@ -105,11 +105,46 @@ async function waitForResearchContent(page, timeoutMs) {
   });
 }
 
+function isGeoBlockedText(bodyText) {
+  return (
+    /unable to provide services to users in your location/i.test(bodyText) ||
+    /service is no longer available for users in the region of your IP address/i.test(bodyText) ||
+    /our service is no longer available for users in the region/i.test(bodyText)
+  );
+}
+
+async function dismissBlockingModals(page) {
+  const candidates = [
+    page.getByRole("button", { name: /got it/i }),
+    page.getByText("Got It", { exact: true }),
+    page.getByRole("button", { name: /accept/i }),
+    page.getByRole("button", { name: /agree/i }),
+  ];
+
+  for (const candidate of candidates) {
+    try {
+      const count = await candidate.count();
+      if (!count) {
+        continue;
+      }
+
+      await candidate.first().click({ timeout: 2000 });
+      await page.waitForTimeout(500);
+    } catch (error) {
+      logger.debug("Modal dismiss candidate failed", { error: error.message });
+    }
+  }
+}
+
 async function assertCoinExPageAvailable(page) {
   const bodyText = await page.locator("body").innerText({ timeout: 5000 }).catch(() => "");
 
-  if (/unable to provide services to users in your location/i.test(bodyText)) {
-    throw new Error("CoinEx unavailable for current location or IP address");
+  if (isGeoBlockedText(bodyText)) {
+    const locationMatch = bodyText.match(/Your IP Location:\s*([^\n]+)/i);
+    const location = locationMatch ? locationMatch[1].trim() : "unknown";
+    throw new Error(
+      `CoinEx unavailable for current location or IP address (detected: ${location}). Choose a VPS region where CoinEx Futures fully loads.`,
+    );
   }
 
   if (/captcha|verify you are human/i.test(bodyText)) {
@@ -227,6 +262,7 @@ async function scrapeAiResearch(symbol, options = {}) {
     await page.goto(url, { waitUntil: "domcontentloaded", timeout: timeoutMs });
     await page.waitForLoadState("networkidle", { timeout: timeoutMs }).catch(() => {});
     await waitForInitialRender(page);
+    await dismissBlockingModals(page);
     await assertCoinExPageAvailable(page);
 
     logger.info("Opening AI Research tab", { symbol });
