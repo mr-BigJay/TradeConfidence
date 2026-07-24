@@ -432,7 +432,7 @@ function buildAnalysisCardHtml(analysis, candles = []) {
         <div class="logo">₿</div>
         <div>
           <div class="pair">${escapeHtml(analysis.pair_label || analysis.symbol)}</div>
-          <div class="sub">شرح تحلیل پژوهشی</div>
+          <div class="sub">تحلیل وضعیت بازار</div>
         </div>
       </div>
       <div class="meta-top">${escapeHtml(date)}<br>${escapeHtml(time)}</div>

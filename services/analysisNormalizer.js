@@ -177,13 +177,22 @@ function asConfirmBlock(value, fallbackZone = "نامشخص") {
 }
 
 const BRAND_REPLACEMENTS = [
-  [/coinglass/gi, "داده‌های مشتقه"],
-  [/bitunix/gi, "داده‌های مشتقه"],
-  [/coinex/gi, "تحلیل پژوهشی"],
-  [/بیت\s*یونیکس/g, "داده‌های مشتقه"],
-  [/بیتونیکس/g, "داده‌های مشتقه"],
-  [/کوین\s*گلس/g, "داده‌های مشتقه"],
-  [/کوینکس/g, "تحلیل پژوهشی"],
+  [/coinglass/gi, ""],
+  [/bitunix/gi, ""],
+  [/coinex/gi, ""],
+  [/بیت\s*یونیکس/g, ""],
+  [/بیتونیکس/g, ""],
+  [/کوین\s*گلس/g, ""],
+  [/کوینکس/g, ""],
+  // Avoid source-attribution phrases so the note reads as original analysis.
+  [/مبتنی بر گزارش پژوهشی فعلی\s*:?\s*/g, ""],
+  [/برگرفته از بخش اخبار\/?فاندامنتال گزارش پژوهشی\s*/g, ""],
+  [/برگرفته از سیگنال‌های تکنیکال گزارش پژوهشی\s*/g, ""],
+  [/برگرفته از[^.!\n]*/g, ""],
+  [/گزارش پژوهشی/g, "تحلیل"],
+  [/تحلیل پژوهشی/g, "تحلیل"],
+  [/نقشه راه پژوهشی/g, "تحلیل"],
+  [/داده‌های مشتقه/g, "بازار"],
 ];
 
 function stripBrandNames(value) {
@@ -195,7 +204,11 @@ function stripBrandNames(value) {
   for (const [pattern, replacement] of BRAND_REPLACEMENTS) {
     text = text.replace(pattern, replacement);
   }
-  return text.replace(/\s{2,}/g, " ").trim();
+  return text
+    .replace(/\(\s*\)/g, "")
+    .replace(/\s{2,}/g, " ")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
 }
 
 function sanitizeValue(value) {

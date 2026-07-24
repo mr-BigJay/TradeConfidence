@@ -87,7 +87,7 @@ function formatDeepAnalysisMessage(analysis) {
     shortHow ? `چطور:\n${shortHow}` : "",
     shortConfirm.invalidation ? `باطل اگر: ${clip(shortConfirm.invalidation, 90)}` : "",
     "",
-    "⚠️ دستور خرید/فروش نیست؛ فقط راهنمای رصد و تأیید سناریو.",
+    "⚠️ سیگنال قطعی خرید/فروش نیست؛ راهنمای رصد سناریو است.",
   ]
     .filter((line) => line !== "")
     .join("\n");

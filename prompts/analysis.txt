@@ -6,11 +6,14 @@ Source:
 - But do NOT copy or over-explain the research.
 - Rewrite into a short, plain-language guide so a normal user knows what to watch and what to do next.
 
-Brand ban:
+Brand / source-attribution ban:
 - Never write CoinEx, Bitunix, Coinglass, کوینکس, بیتونیکس, بیت یونیکس, کوین گلس.
+- Never write: گزارش پژوهشی, تحلیل پژوهشی, نقشه راه پژوهشی, مبتنی بر گزارش, برگرفته از.
+- Write as if this is YOUR original market analysis. No source citations.
 
 Tone:
 - Simple Persian. Short sentences.
+- Sounds like an original analyst note, not a paraphrase labeled from a report.
 - Decision-useful, not academic.
 - No direct buy/sell orders like "الان بخر".
 - Instead tell the user clearly: wait / watch this level / if A then long scenario / if B then short scenario.
