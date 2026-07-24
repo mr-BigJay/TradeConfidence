@@ -12,6 +12,13 @@ function toneClass(tone) {
   return "tone-neutral";
 }
 
+function biasClass(bias) {
+  const text = String(bias || "");
+  if (/صعودی|bull/i.test(text)) return "bias-bull";
+  if (/نزولی|bear/i.test(text)) return "bias-bear";
+  return "bias-neutral";
+}
+
 function formatNow() {
   const now = new Date();
   const date = now.toLocaleDateString("fa-IR", {
@@ -94,16 +101,14 @@ function buildCandleSvg(candles = [], analysis = {}) {
     })
     .join("");
 
+  // Lines only on chart — numeric levels are shown once in the chips section below.
   const resistanceLines = (analysis.key_resistance || [])
     .slice(0, 2)
     .map((level) => {
       const price = parseLevel(level);
       if (price === null) return "";
       const y = yFor(price);
-      return `
-        <line x1="${plotLeft}" y1="${y}" x2="${plotRight}" y2="${y}" stroke="#ef4444" stroke-dasharray="6 4" stroke-width="1.2" opacity="0.85" />
-        <text x="${plotRight - 4}" y="${y - 5}" fill="#fca5a5" font-size="14" text-anchor="end" font-family="Vazirmatn, sans-serif">${escapeHtml(formatPrice(level))}</text>
-      `;
+      return `<line x1="${plotLeft}" y1="${y}" x2="${plotRight}" y2="${y}" stroke="#ef4444" stroke-dasharray="6 4" stroke-width="1.2" opacity="0.85" />`;
     })
     .join("");
 
@@ -113,10 +118,7 @@ function buildCandleSvg(candles = [], analysis = {}) {
       const price = parseLevel(level);
       if (price === null) return "";
       const y = yFor(price);
-      return `
-        <line x1="${plotLeft}" y1="${y}" x2="${plotRight}" y2="${y}" stroke="#22c55e" stroke-dasharray="6 4" stroke-width="1.2" opacity="0.85" />
-        <text x="${plotRight - 4}" y="${y - 5}" fill="#86efac" font-size="14" text-anchor="end" font-family="Vazirmatn, sans-serif">${escapeHtml(formatPrice(level))}</text>
-      `;
+      return `<line x1="${plotLeft}" y1="${y}" x2="${plotRight}" y2="${y}" stroke="#22c55e" stroke-dasharray="6 4" stroke-width="1.2" opacity="0.85" />`;
     })
     .join("");
 
@@ -160,7 +162,19 @@ function renderLevelChips(items, kind) {
 }
 
 function buildChecklistRows(analysis) {
-  const rows = (analysis.derivatives_checklist || []).slice(0, 6);
+  const seen = new Set();
+  const rows = [];
+  for (const item of analysis.derivatives_checklist || []) {
+    const key = String(item.name || "")
+      .toLowerCase()
+      .replace(/\s+/g, " ")
+      .trim();
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    rows.push(item);
+    if (rows.length >= 6) break;
+  }
+
   if (!rows.length) {
     return `<div class="check-empty">چک‌لیست Bitunix در این کارت نیست</div>`;
   }
@@ -258,8 +272,10 @@ function buildAnalysisCardHtml(analysis, candles = []) {
     }
     .label { color: #94a3b8; font-size: 14px; font-weight: 700; margin-bottom: 8px; }
     .value-lg { font-size: 34px; font-weight: 800; line-height: 1.1; }
-    .bias { color: #fbbf24; }
-    .conf { color: #34d399; }
+    .bias-bull { color: #4ade80; }
+    .bias-bear { color: #f87171; }
+    .bias-neutral { color: #fbbf24; }
+    .conf { color: #38bdf8; }
     .price { color: #e2e8f0; }
     .score-row {
       display: grid;
@@ -294,16 +310,18 @@ function buildAnalysisCardHtml(analysis, candles = []) {
       border-radius: 14px;
       background: #111827;
       border: 1px solid rgba(148,163,184,.08);
-      border-right: 4px solid #64748b;
+      border-inline-start: 5px solid #64748b;
       font-size: 16px;
       font-weight: 700;
     }
-    .check-row.tone-bull { border-right-color: #22c55e; }
-    .check-row.tone-bear { border-right-color: #ef4444; }
-    .check-row.tone-neutral { border-right-color: #f59e0b; }
+    .check-row.tone-bull { border-inline-start-color: #22c55e; background: rgba(34,197,94,.06); }
+    .check-row.tone-bear { border-inline-start-color: #ef4444; background: rgba(239,68,68,.06); }
+    .check-row.tone-neutral { border-inline-start-color: #f59e0b; background: rgba(245,158,11,.06); }
     .check-name { color: #cbd5e1; }
     .check-value { color: #e2e8f0; text-align: center; }
-    .check-result { color: #93c5fd; text-align: left; }
+    .check-row.tone-bull .check-result { color: #4ade80; text-align: left; }
+    .check-row.tone-bear .check-result { color: #f87171; text-align: left; }
+    .check-row.tone-neutral .check-result { color: #fbbf24; text-align: left; }
     .check-empty, .chart-empty {
       color: #64748b;
       text-align: center;
@@ -347,11 +365,11 @@ function buildAnalysisCardHtml(analysis, candles = []) {
       padding: 14px 16px;
       background: #111827;
       border: 1px solid rgba(148,163,184,.1);
-      border-right: 4px solid #64748b;
+      border-inline-start: 5px solid #64748b;
     }
-    .scenario.tone-bull { border-right-color: #22c55e; }
-    .scenario.tone-bear { border-right-color: #ef4444; }
-    .scenario.tone-neutral { border-right-color: #f59e0b; }
+    .scenario.tone-bull { border-inline-start-color: #22c55e; background: rgba(34,197,94,.06); }
+    .scenario.tone-bear { border-inline-start-color: #ef4444; background: rgba(239,68,68,.06); }
+    .scenario.tone-neutral { border-inline-start-color: #f59e0b; background: rgba(245,158,11,.06); }
     .scenario-head {
       display: flex;
       justify-content: space-between;
@@ -399,7 +417,7 @@ function buildAnalysisCardHtml(analysis, candles = []) {
     <div class="stats">
       <div class="panel">
         <div class="label">تمایل بازار</div>
-        <div class="value-lg bias">${escapeHtml(analysis.bias || "خنثی")}</div>
+        <div class="value-lg ${biasClass(analysis.bias)}">${escapeHtml(analysis.bias || "خنثی")}</div>
       </div>
       <div class="panel">
         <div class="label">اطمینان</div>

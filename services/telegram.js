@@ -18,6 +18,22 @@ function toneEmoji(tone) {
   return "🟠";
 }
 
+function uniqueChecklist(items) {
+  const seen = new Set();
+  const out = [];
+  for (const item of items || []) {
+    const key = String(item.name || "")
+      .toLowerCase()
+      .replace(/\s+/g, " ")
+      .trim();
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    out.push(item);
+    if (out.length >= 6) break;
+  }
+  return out;
+}
+
 function joinLines(items, bullet = "•") {
   return (items || []).map((item) => `${bullet} ${item}`).join("\n");
 }
@@ -28,8 +44,7 @@ function joinLines(items, bullet = "•") {
  * Avoids long fundamental/technical essays that make the feed noisy.
  */
 function formatDeepAnalysisMessage(analysis) {
-  const checklist = (analysis.derivatives_checklist || [])
-    .slice(0, 6)
+  const checklist = uniqueChecklist(analysis.derivatives_checklist)
     .map((item) => `${toneEmoji(item.tone)} ${item.name}: ${item.value} → ${item.result}`)
     .join("\n");
 
