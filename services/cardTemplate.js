@@ -26,7 +26,7 @@ function formatNow() {
     hour12: false,
     timeZone: "UTC",
   });
-  return { date, time: `${time} (UTC)` };
+  return { date, time: `${time} UTC` };
 }
 
 function parseLevel(value) {
@@ -42,14 +42,15 @@ function formatPrice(value) {
 
 function buildCandleSvg(candles = [], analysis = {}) {
   if (!candles.length) {
-    return `<div class="chart-empty">نمودار قیمت در دسترس نیست</div>`;
+    return `<div class="chart-empty">نمودار در دسترس نیست</div>`;
   }
 
-  const width = 560;
-  const height = 300;
-  const padLeft = 16;
-  const padRight = 78; // room for price axis label (off the candles)
-  const padY = 22;
+  // Portrait chart canvas (fits 1080-wide phone story)
+  const width = 980;
+  const height = 420;
+  const padLeft = 12;
+  const padRight = 86;
+  const padY = 20;
   const plotLeft = padLeft;
   const plotRight = width - padRight;
   const plotWidth = plotRight - plotLeft;
@@ -64,14 +65,14 @@ function buildCandleSvg(candles = [], analysis = {}) {
   const min = Math.min(...lows, ...(levelValues.length ? levelValues : highs));
   const span = Math.max(max - min, 1);
   const step = plotWidth / Math.max(candles.length, 1);
-  const bodyWidth = Math.max(1.1, Math.min(step * 0.52, 3.2));
+  const bodyWidth = Math.max(1.1, Math.min(step * 0.52, 3.4));
   const wickWidth = Math.max(0.8, Math.min(bodyWidth * 0.35, 1.4));
   const yFor = (price) => padY + ((max - price) / span) * (height - padY * 2);
 
-  const grid = [0.15, 0.35, 0.55, 0.75]
+  const grid = [0.2, 0.4, 0.6, 0.8]
     .map((ratio) => {
       const y = padY + ratio * (height - padY * 2);
-      return `<line x1="${plotLeft}" y1="${y}" x2="${plotRight}" y2="${y}" stroke="rgba(100,116,139,0.18)" stroke-width="1" />`;
+      return `<line x1="${plotLeft}" y1="${y}" x2="${plotRight}" y2="${y}" stroke="rgba(100,116,139,0.16)" stroke-width="1" />`;
     })
     .join("");
 
@@ -88,7 +89,7 @@ function buildCandleSvg(candles = [], analysis = {}) {
       const bodyHeight = Math.max(Math.abs(yClose - yOpen), 1.6);
       return `
         <line x1="${x}" y1="${yHigh}" x2="${x}" y2="${yLow}" stroke="${color}" stroke-width="${wickWidth}" />
-        <rect x="${x - bodyWidth / 2}" y="${top}" width="${bodyWidth}" height="${bodyHeight}" fill="${color}" rx="0.6" />
+        <rect x="${x - bodyWidth / 2}" y="${top}" width="${bodyWidth}" height="${bodyHeight}" fill="${color}" rx="0.5" />
       `;
     })
     .join("");
@@ -101,7 +102,7 @@ function buildCandleSvg(candles = [], analysis = {}) {
       const y = yFor(price);
       return `
         <line x1="${plotLeft}" y1="${y}" x2="${plotRight}" y2="${y}" stroke="#ef4444" stroke-dasharray="6 4" stroke-width="1.2" opacity="0.85" />
-        <text x="${plotRight - 4}" y="${y - 5}" fill="#fca5a5" font-size="10" text-anchor="end" font-family="Vazirmatn, sans-serif">${escapeHtml(formatPrice(level))}</text>
+        <text x="${plotRight - 4}" y="${y - 5}" fill="#fca5a5" font-size="14" text-anchor="end" font-family="Vazirmatn, sans-serif">${escapeHtml(formatPrice(level))}</text>
       `;
     })
     .join("");
@@ -114,7 +115,7 @@ function buildCandleSvg(candles = [], analysis = {}) {
       const y = yFor(price);
       return `
         <line x1="${plotLeft}" y1="${y}" x2="${plotRight}" y2="${y}" stroke="#22c55e" stroke-dasharray="6 4" stroke-width="1.2" opacity="0.85" />
-        <text x="${plotRight - 4}" y="${y - 5}" fill="#86efac" font-size="10" text-anchor="end" font-family="Vazirmatn, sans-serif">${escapeHtml(formatPrice(level))}</text>
+        <text x="${plotRight - 4}" y="${y - 5}" fill="#86efac" font-size="14" text-anchor="end" font-family="Vazirmatn, sans-serif">${escapeHtml(formatPrice(level))}</text>
       `;
     })
     .join("");
@@ -122,45 +123,55 @@ function buildCandleSvg(candles = [], analysis = {}) {
   const last = candles[candles.length - 1];
   const lastY = yFor(last.close);
   const priceLabel = formatPrice(analysis.current_price || last.close);
-  const tagY = Math.min(Math.max(lastY - 11, 8), height - 30);
+  const tagY = Math.min(Math.max(lastY - 14, 8), height - 36);
 
   return `
-    <svg viewBox="0 0 ${width} ${height}" width="100%" height="300" xmlns="http://www.w3.org/2000/svg">
+    <svg viewBox="0 0 ${width} ${height}" width="100%" height="420" xmlns="http://www.w3.org/2000/svg">
       <defs>
         <linearGradient id="chartBg" x1="0" y1="0" x2="0" y2="1">
           <stop offset="0%" stop-color="#101b31" />
           <stop offset="100%" stop-color="#0a1220" />
         </linearGradient>
       </defs>
-      <rect x="0" y="0" width="${width}" height="${height}" fill="url(#chartBg)" rx="14" />
+      <rect x="0" y="0" width="${width}" height="${height}" fill="url(#chartBg)" rx="18" />
       ${grid}
       ${resistanceLines}
       ${supportLines}
       ${body}
       <line x1="${plotLeft}" y1="${lastY}" x2="${plotRight}" y2="${lastY}" stroke="rgba(56,189,248,0.35)" stroke-dasharray="3 3" stroke-width="1" />
-      <rect x="${plotRight + 4}" y="${tagY}" rx="6" width="70" height="22" fill="#0ea5e9" />
-      <text x="${plotRight + 39}" y="${tagY + 15}" fill="#0b1220" font-size="11" text-anchor="middle" font-family="Vazirmatn, sans-serif" font-weight="700">${escapeHtml(priceLabel)}</text>
+      <rect x="${plotRight + 4}" y="${tagY}" rx="8" width="78" height="28" fill="#0ea5e9" />
+      <text x="${plotRight + 43}" y="${tagY + 19}" fill="#061018" font-size="13" text-anchor="middle" font-family="Vazirmatn, sans-serif" font-weight="800">${escapeHtml(priceLabel)}</text>
     </svg>
   `;
 }
 
-function renderLevels(items, kind) {
+function renderLevelChips(items, kind) {
   if (!items?.length) {
-    return `<div class="level-row muted">نامشخص</div>`;
+    return `<div class="chip muted">نامشخص</div>`;
   }
-
-  const labels =
-    kind === "resist"
-      ? ["مقاومت اصلی", "مقاومت بعدی (بریک‌اوت)", "هدف بالاتر"]
-      : ["حمایت نزدیک", "حمایت میانی", "حمایت اصلی"];
 
   return items
     .slice(0, 3)
     .map(
-      (item, index) => `
-      <div class="level-row ${kind}">
-        <span class="level-label">${escapeHtml(labels[index] || "سطح")}</span>
-        <span class="level-value">${escapeHtml(formatPrice(item))}</span>
+      (item) => `
+      <div class="chip ${kind}">${escapeHtml(formatPrice(item))}</div>`,
+    )
+    .join("");
+}
+
+function buildChecklistRows(analysis) {
+  const rows = (analysis.derivatives_checklist || []).slice(0, 6);
+  if (!rows.length) {
+    return `<div class="check-empty">چک‌لیست Bitunix در این کارت نیست</div>`;
+  }
+
+  return rows
+    .map(
+      (item) => `
+      <div class="check-row ${toneClass(item.tone)}">
+        <div class="check-name">${escapeHtml(item.name)}</div>
+        <div class="check-value">${escapeHtml(item.value)}</div>
+        <div class="check-result">${escapeHtml(item.result)}</div>
       </div>`,
     )
     .join("");
@@ -169,48 +180,24 @@ function renderLevels(items, kind) {
 function buildAnalysisCardHtml(analysis, candles = []) {
   const { date, time } = formatNow();
   const confidence = Number(analysis.confidence) || 0;
-  const circumference = 2 * Math.PI * 30;
-  const offset = circumference - (confidence / 100) * circumference;
-
-  const insights = (analysis.insights || []).slice(0, 4);
-  while (insights.length < 4) {
-    insights.push({
-      title: analysis.summary ? "خلاصه بازار" : "نکته",
-      text: analysis.summary || analysis.market_summary || "در حال آماده‌سازی",
-      tone: "neutral",
-    });
-  }
-
-  const insightHtml = insights
-    .map(
-      (item) => `
-      <div class="insight ${toneClass(item.tone)}">
-        <div class="insight-title">${escapeHtml(item.title)}</div>
-        <div class="insight-text">${escapeHtml(item.text)}</div>
-      </div>`,
-    )
-    .join("");
-
-  const indicators = (analysis.indicators || []).slice(0, 7);
-  const indicatorHtml = indicators.length
-    ? indicators
-        .map(
-          (item) => `
-        <div class="indicator ${toneClass(item.tone)}">
-          <div class="indicator-name">${escapeHtml(item.name)}</div>
-          <div class="indicator-status">${escapeHtml(item.status)}</div>
-        </div>`,
-        )
-        .join("")
-    : `<div class="indicator tone-neutral"><div class="indicator-name">وضعیت</div><div class="indicator-status">${escapeHtml(analysis.bias)}</div></div>`;
-
   const showNeutral = Number(analysis.neutral_scenario_probability) > 0;
+  const longScore =
+    analysis.long_score !== null && analysis.long_score !== undefined
+      ? analysis.long_score
+      : "-";
+  const shortScore =
+    analysis.short_score !== null && analysis.short_score !== undefined
+      ? analysis.short_score
+      : "-";
+
+  const summary =
+    analysis.summary || analysis.market_summary || analysis.final_verdict || "در حال آماده‌سازی";
 
   return `<!DOCTYPE html>
 <html lang="fa" dir="rtl">
 <head>
   <meta charset="UTF-8" />
-  <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@500;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@600;700;800&display=swap" rel="stylesheet">
   <style>
     * { box-sizing: border-box; }
     body {
@@ -220,238 +207,157 @@ function buildAnalysisCardHtml(analysis, candles = []) {
       font-family: "Vazirmatn", sans-serif;
       -webkit-font-smoothing: antialiased;
     }
+    /* Phone full-screen story: 9:16 */
     .card {
-      width: 1600px;
-      padding: 24px 24px 20px;
+      width: 1080px;
+      min-height: 1920px;
+      padding: 36px 34px 28px;
       background:
-        radial-gradient(circle at 10% 0%, rgba(56,189,248,.12), transparent 26%),
-        radial-gradient(circle at 90% 0%, rgba(34,197,94,.10), transparent 24%),
-        linear-gradient(180deg, #07111f 0%, #050b16 45%, #020617 100%);
+        radial-gradient(circle at 20% 0%, rgba(56,189,248,.14), transparent 30%),
+        radial-gradient(circle at 85% 8%, rgba(34,197,94,.10), transparent 28%),
+        linear-gradient(180deg, #07111f 0%, #050b16 50%, #020617 100%);
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
     }
-
-    /* ===== HEADER ===== */
-    .header {
-      display: grid;
-      grid-template-columns: 1.25fr 1fr 1.15fr;
-      gap: 14px;
-      margin-bottom: 14px;
+    .top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 16px;
     }
-    .panel {
-      background: #0b1526;
-      border: 1px solid rgba(148,163,184,.14);
-      border-radius: 16px;
-      padding: 16px 18px;
-    }
-    .brand-row {
+    .brand {
       display: flex;
       align-items: center;
-      gap: 12px;
+      gap: 14px;
     }
-    .btc-logo {
-      width: 46px;
-      height: 46px;
+    .logo {
+      width: 64px;
+      height: 64px;
       border-radius: 50%;
       background: radial-gradient(circle at 30% 28%, #ffd48a, #f7931a 60%, #c2410c);
       display: grid;
       place-items: center;
       color: #111;
-      font-size: 22px;
-      font-weight: 800;
-      box-shadow: 0 0 16px rgba(247,147,26,.35);
-    }
-    .pair-name {
       font-size: 30px;
       font-weight: 800;
-      letter-spacing: -0.4px;
     }
-    .pair-sub {
-      margin-top: 4px;
-      color: #93c5fd;
-      font-size: 14px;
-      font-weight: 600;
-    }
-    .field-label {
-      color: #94a3b8;
-      font-size: 12px;
-      font-weight: 600;
-      margin-bottom: 8px;
-    }
-    .bias-row {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-    }
-    .bias-value {
-      font-size: 32px;
-      font-weight: 800;
-      color: #fbbf24;
-    }
-    .bias-chip {
-      min-width: 52px;
-      height: 36px;
-      border-radius: 10px;
-      border: 1px solid rgba(245,158,11,.35);
-      background: rgba(245,158,11,.12);
-      color: #f59e0b;
+    .pair { font-size: 40px; font-weight: 800; line-height: 1.1; }
+    .sub { margin-top: 4px; color: #93c5fd; font-size: 16px; font-weight: 700; }
+    .meta-top { text-align: left; color: #94a3b8; font-size: 15px; font-weight: 600; }
+    .stats {
       display: grid;
-      place-items: center;
-      font-size: 20px;
-      font-weight: 700;
-    }
-    .confidence-row {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
+      grid-template-columns: 1.1fr 1fr 1fr;
       gap: 12px;
     }
-    .confidence-value {
-      font-size: 34px;
-      font-weight: 800;
-      color: #34d399;
-      line-height: 1;
-    }
-    .confidence-meta {
-      color: #94a3b8;
-      font-size: 12px;
-      margin-top: 6px;
-    }
-    .ring-wrap { position: relative; width: 78px; height: 78px; }
-    .ring-wrap svg { width: 78px; height: 78px; }
-    .ring-center {
-      position: absolute;
-      inset: 0;
-      display: grid;
-      place-items: center;
-      font-size: 13px;
-      font-weight: 800;
-      color: #34d399;
-    }
-
-    /* ===== INSIGHTS ===== */
-    .insights {
-      display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap: 12px;
-      margin-bottom: 14px;
-    }
-    .insight {
-      min-height: 118px;
-      border-radius: 14px;
-      padding: 14px 14px 14px 16px;
+    .panel {
       background: #0b1526;
-      border: 1px solid rgba(148,163,184,.12);
+      border: 1px solid rgba(148,163,184,.14);
+      border-radius: 20px;
+      padding: 18px 18px;
     }
-    .insight.tone-bull { border-right: 4px solid #22c55e; }
-    .insight.tone-bear { border-right: 4px solid #ef4444; }
-    .insight.tone-neutral { border-right: 4px solid #f59e0b; }
-    .insight-title {
-      font-size: 14px;
-      font-weight: 800;
-      margin-bottom: 8px;
-    }
-    .insight.tone-bull .insight-title { color: #4ade80; }
-    .insight.tone-bear .insight-title { color: #f87171; }
-    .insight.tone-neutral .insight-title { color: #fbbf24; }
-    .insight-text {
-      color: #cbd5e1;
-      font-size: 12.5px;
-      line-height: 1.75;
-    }
-
-    /* ===== MAIN 3 COLS ===== */
-    .main {
+    .label { color: #94a3b8; font-size: 14px; font-weight: 700; margin-bottom: 8px; }
+    .value-lg { font-size: 34px; font-weight: 800; line-height: 1.1; }
+    .bias { color: #fbbf24; }
+    .conf { color: #34d399; }
+    .price { color: #e2e8f0; }
+    .score-row {
       display: grid;
-      grid-template-columns: 0.82fr 1.36fr 0.96fr;
+      grid-template-columns: 1fr 1fr;
       gap: 12px;
-      margin-bottom: 12px;
     }
+    .score {
+      border-radius: 18px;
+      padding: 16px 18px;
+      background: #0b1526;
+      border: 1px solid rgba(148,163,184,.14);
+      text-align: center;
+    }
+    .score.long { border-color: rgba(34,197,94,.35); }
+    .score.short { border-color: rgba(239,68,68,.35); }
+    .score .n { font-size: 42px; font-weight: 800; }
+    .score.long .n { color: #4ade80; }
+    .score.short .n { color: #f87171; }
     .section-title {
-      font-size: 14px;
+      font-size: 18px;
       font-weight: 800;
       color: #93c5fd;
       margin-bottom: 12px;
     }
-    .group-title {
-      font-size: 12px;
-      font-weight: 700;
-      margin: 8px 0;
-    }
-    .group-title.resist { color: #fca5a5; }
-    .group-title.support { color: #86efac; }
-    .level-row {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
+    .check-row {
+      display: grid;
+      grid-template-columns: 1.3fr 0.9fr 1.2fr;
       gap: 8px;
-      padding: 10px 12px;
-      border-radius: 10px;
-      margin-bottom: 7px;
+      align-items: center;
+      padding: 12px 14px;
+      margin-bottom: 8px;
+      border-radius: 14px;
       background: #111827;
       border: 1px solid rgba(148,163,184,.08);
-      font-size: 12.5px;
-    }
-    .level-label { color: #94a3b8; }
-    .level-row.resist .level-value { color: #fca5a5; font-weight: 800; }
-    .level-row.support .level-value { color: #86efac; font-weight: 800; }
-    .range-box {
-      margin-top: 12px;
-      padding: 12px;
-      border-radius: 12px;
-      background: linear-gradient(90deg, rgba(34,197,94,.08), rgba(239,68,68,.08));
-      border: 1px dashed rgba(148,163,184,.28);
-    }
-    .range-box .k { color: #94a3b8; font-size: 11px; }
-    .range-box .v { margin-top: 6px; font-size: 16px; font-weight: 800; }
-    .range-box .s {
-      margin-top: 6px;
-      display: inline-block;
-      padding: 3px 8px;
-      border-radius: 999px;
-      background: rgba(251,191,36,.12);
-      color: #fbbf24;
-      font-size: 11px;
+      border-right: 4px solid #64748b;
+      font-size: 16px;
       font-weight: 700;
     }
-
-    .chart-title {
-      font-size: 14px;
-      font-weight: 800;
-      color: #93c5fd;
-      margin-bottom: 10px;
-    }
-    .meta-grid {
-      display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap: 8px;
-      margin-top: 10px;
-    }
-    .meta {
+    .check-row.tone-bull { border-right-color: #22c55e; }
+    .check-row.tone-bear { border-right-color: #ef4444; }
+    .check-row.tone-neutral { border-right-color: #f59e0b; }
+    .check-name { color: #cbd5e1; }
+    .check-value { color: #e2e8f0; text-align: center; }
+    .check-result { color: #93c5fd; text-align: left; }
+    .check-empty, .chart-empty {
+      color: #64748b;
       text-align: center;
-      background: #111827;
-      border: 1px solid rgba(148,163,184,.1);
-      border-radius: 12px;
-      padding: 10px 6px;
+      padding: 28px;
+      border: 1px dashed rgba(148,163,184,.2);
+      border-radius: 16px;
     }
-    .meta .k { color: #94a3b8; font-size: 11px; }
-    .meta .v { margin-top: 6px; font-size: 13px; font-weight: 800; }
-
+    .summary {
+      font-size: 20px;
+      line-height: 1.75;
+      font-weight: 700;
+      color: #e2e8f0;
+    }
+    .levels {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+    .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+    .chip {
+      padding: 10px 14px;
+      border-radius: 999px;
+      font-size: 18px;
+      font-weight: 800;
+      background: #111827;
+      border: 1px solid rgba(148,163,184,.12);
+    }
+    .chip.resist { color: #fca5a5; border-color: rgba(239,68,68,.28); }
+    .chip.support { color: #86efac; border-color: rgba(34,197,94,.28); }
+    .chip.muted { color: #94a3b8; }
+    .range {
+      margin-top: 10px;
+      color: #94a3b8;
+      font-size: 16px;
+      font-weight: 700;
+    }
+    .range strong { color: #e2e8f0; }
+    .scenarios { display: grid; gap: 10px; }
     .scenario {
-      border-radius: 12px;
-      padding: 12px;
-      margin-bottom: 8px;
+      border-radius: 16px;
+      padding: 14px 16px;
       background: #111827;
       border: 1px solid rgba(148,163,184,.1);
+      border-right: 4px solid #64748b;
     }
-    .scenario.tone-bull { border-right: 3px solid #22c55e; }
-    .scenario.tone-bear { border-right: 3px solid #ef4444; }
-    .scenario.tone-neutral { border-right: 3px solid #f59e0b; }
+    .scenario.tone-bull { border-right-color: #22c55e; }
+    .scenario.tone-bear { border-right-color: #ef4444; }
+    .scenario.tone-neutral { border-right-color: #f59e0b; }
     .scenario-head {
       display: flex;
       justify-content: space-between;
-      align-items: center;
+      font-size: 18px;
       font-weight: 800;
-      margin-bottom: 7px;
-      font-size: 13px;
+      margin-bottom: 6px;
     }
     .scenario.tone-bull .scenario-head { color: #4ade80; }
     .scenario.tone-bear .scenario-head { color: #f87171; }
@@ -459,196 +365,99 @@ function buildAnalysisCardHtml(analysis, candles = []) {
     .scenario p {
       margin: 0;
       color: #cbd5e1;
-      font-size: 12.5px;
-      line-height: 1.7;
-    }
-    .targets {
-      margin-top: 7px;
-      color: #93c5fd;
-      font-size: 12px;
-      font-weight: 700;
-    }
-
-    /* ===== INDICATORS ===== */
-    .indicators {
-      display: grid;
-      grid-template-columns: repeat(7, 1fr);
-      gap: 8px;
-      margin-bottom: 12px;
-    }
-    .indicator {
-      min-height: 78px;
-      text-align: center;
-      border-radius: 12px;
-      padding: 10px 6px;
-      background: #0b1526;
-      border: 1px solid rgba(148,163,184,.12);
-    }
-    .indicator.tone-bull { box-shadow: inset 0 -3px 0 #22c55e; }
-    .indicator.tone-bear { box-shadow: inset 0 -3px 0 #ef4444; }
-    .indicator.tone-neutral { box-shadow: inset 0 -3px 0 #f59e0b; }
-    .indicator-name {
-      color: #94a3b8;
-      font-size: 11px;
-      margin-bottom: 8px;
+      font-size: 17px;
+      line-height: 1.6;
       font-weight: 600;
     }
-    .indicator-status { font-size: 13px; font-weight: 800; }
-    .indicator.tone-bull .indicator-status { color: #4ade80; }
-    .indicator.tone-bear .indicator-status { color: #f87171; }
-    .indicator.tone-neutral .indicator-status { color: #fbbf24; }
-
-    /* ===== STRATEGIES ===== */
-    .strategies {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 12px;
-      margin-bottom: 12px;
-    }
-    .strategy {
+    .fill { flex: 1; }
+    .disclaimer {
       border-radius: 14px;
       padding: 14px 16px;
-      background: #0b1526;
-      border: 1px solid rgba(148,163,184,.12);
-    }
-    .strategy.long { border-color: rgba(34,197,94,.35); background: linear-gradient(180deg, rgba(34,197,94,.08), #0b1526 40%); }
-    .strategy.short { border-color: rgba(245,158,11,.35); background: linear-gradient(180deg, rgba(245,158,11,.08), #0b1526 40%); }
-    .strategy-title {
-      font-size: 14px;
-      font-weight: 800;
-      margin-bottom: 8px;
-    }
-    .strategy.long .strategy-title { color: #4ade80; }
-    .strategy.short .strategy-title { color: #fbbf24; }
-    .strategy-body {
-      color: #cbd5e1;
-      font-size: 13px;
-      line-height: 1.85;
-    }
-
-    /* ===== SUMMARY BAR ===== */
-    .summary-bar {
-      display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap: 10px;
-      margin-bottom: 12px;
-    }
-    .summary-item {
-      text-align: center;
-      background: #0b1526;
-      border: 1px solid rgba(148,163,184,.14);
-      border-radius: 14px;
-      padding: 14px 10px;
-    }
-    .summary-item .k {
-      color: #94a3b8;
-      font-size: 12px;
-      font-weight: 600;
-    }
-    .summary-item .v {
-      margin-top: 8px;
-      font-size: 18px;
-      font-weight: 800;
-    }
-
-    .disclaimer {
-      border-radius: 12px;
-      padding: 11px 14px;
       background: rgba(250, 204, 21, 0.08);
       border: 1px solid rgba(250, 204, 21, 0.22);
       color: #fde68a;
-      font-size: 12px;
+      font-size: 15px;
       line-height: 1.7;
       text-align: center;
+      font-weight: 700;
     }
-    .chart-empty {
-      height: 300px;
-      display: grid;
-      place-items: center;
-      color: #64748b;
-      background: #0b1220;
-      border-radius: 14px;
-      border: 1px dashed rgba(148,163,184,.2);
-    }
-    .muted { color: #94a3b8; }
   </style>
 </head>
 <body>
   <div class="card" id="analysis-card">
-    <div class="header">
-      <div class="panel">
-        <div class="brand-row">
-          <div class="btc-logo">₿</div>
-          <div>
-            <div class="pair-name">${escapeHtml(analysis.pair_label || analysis.symbol)}</div>
-            <div class="pair-sub">تحلیل اختصاصی بازار</div>
-          </div>
+    <div class="top">
+      <div class="brand">
+        <div class="logo">₿</div>
+        <div>
+          <div class="pair">${escapeHtml(analysis.pair_label || analysis.symbol)}</div>
+          <div class="sub">وضعیت بازار · تایم‌فریم ۱H</div>
         </div>
       </div>
+      <div class="meta-top">${escapeHtml(date)}<br>${escapeHtml(time)}</div>
+    </div>
 
+    <div class="stats">
       <div class="panel">
-        <div class="field-label">تمایل (Bias)</div>
-        <div class="bias-row">
-          <div class="bias-value">${escapeHtml(analysis.bias || "خنثی")}</div>
-          <div class="bias-chip">⟷</div>
-        </div>
+        <div class="label">تمایل بازار</div>
+        <div class="value-lg bias">${escapeHtml(analysis.bias || "خنثی")}</div>
       </div>
-
       <div class="panel">
-        <div class="confidence-row">
-          <div>
-            <div class="field-label">${escapeHtml(date)} · ${escapeHtml(time)}</div>
-            <div class="confidence-value">${escapeHtml(confidence)}%</div>
-            <div class="confidence-meta">میزان اطمینان</div>
-          </div>
-          <div class="ring-wrap">
-            <svg viewBox="0 0 78 78">
-              <circle cx="39" cy="39" r="30" fill="none" stroke="#1f2937" stroke-width="8" />
-              <circle cx="39" cy="39" r="30" fill="none" stroke="#34d399" stroke-width="8"
-                stroke-linecap="round"
-                stroke-dasharray="${circumference}"
-                stroke-dashoffset="${offset}"
-                transform="rotate(-90 39 39)" />
-            </svg>
-            <div class="ring-center">${escapeHtml(confidence)}%</div>
-          </div>
-        </div>
+        <div class="label">اطمینان</div>
+        <div class="value-lg conf">${escapeHtml(confidence)}%</div>
+      </div>
+      <div class="panel">
+        <div class="label">قیمت</div>
+        <div class="value-lg price">${escapeHtml(formatPrice(analysis.current_price || "-"))}</div>
       </div>
     </div>
 
-    <div class="insights">${insightHtml}</div>
+    <div class="score-row">
+      <div class="score long">
+        <div class="label">امتیاز لانگ</div>
+        <div class="n">${escapeHtml(longScore)}<span style="font-size:22px;color:#94a3b8">/10</span></div>
+      </div>
+      <div class="score short">
+        <div class="label">امتیاز شورت</div>
+        <div class="n">${escapeHtml(shortScore)}<span style="font-size:22px;color:#94a3b8">/10</span></div>
+      </div>
+    </div>
 
-    <div class="main">
-      <div class="panel">
-        <div class="section-title">سطوح کلیدی</div>
-        <div class="group-title resist">مقاومت‌ها</div>
-        ${renderLevels(analysis.key_resistance, "resist")}
-        <div class="group-title support">حمایت‌ها</div>
-        ${renderLevels(analysis.key_support, "support")}
-        <div class="range-box">
-          <div class="k">محدوده نوسان فعلی</div>
-          <div class="v">${escapeHtml(analysis.current_range || "نامشخص")}</div>
-          <div class="s">${escapeHtml(analysis.structure || analysis.bias || "خنثی")}</div>
+    <div class="panel">
+      <div class="section-title">چک‌لیست مشتقه (Bitunix / 1H)</div>
+      ${buildChecklistRows(analysis)}
+    </div>
+
+    <div class="panel">
+      <div class="section-title">نمودار قیمت (1H)</div>
+      ${buildCandleSvg(candles, analysis)}
+    </div>
+
+    <div class="panel">
+      <div class="section-title">خلاصه</div>
+      <div class="summary">${escapeHtml(summary)}</div>
+    </div>
+
+    <div class="panel">
+      <div class="section-title">سطوح کلیدی</div>
+      <div class="levels">
+        <div>
+          <div class="label">مقاومت‌ها</div>
+          <div class="chips">${renderLevelChips(analysis.key_resistance, "resist")}</div>
+        </div>
+        <div>
+          <div class="label">حمایت‌ها</div>
+          <div class="chips">${renderLevelChips(analysis.key_support, "support")}</div>
         </div>
       </div>
+      <div class="range">محدوده: <strong>${escapeHtml(analysis.current_range || "نامشخص")}</strong></div>
+    </div>
 
-      <div class="panel">
-        <div class="chart-title">نمودار قیمت (1H)</div>
-        ${buildCandleSvg(candles, analysis)}
-        <div class="meta-grid">
-          <div class="meta"><div class="k">تایم‌فریم</div><div class="v">1H / 4H</div></div>
-          <div class="meta"><div class="k">ساختار کلی</div><div class="v">${escapeHtml(analysis.structure || "نامشخص")}</div></div>
-          <div class="meta"><div class="k">حجم</div><div class="v">${escapeHtml(analysis.volume_status || "نامشخص")}</div></div>
-          <div class="meta"><div class="k">مومنتوم</div><div class="v">${escapeHtml(analysis.momentum_status || "نامشخص")}</div></div>
-        </div>
-      </div>
-
-      <div class="panel">
-        <div class="section-title">سناریوهای محتمل</div>
+    <div class="panel">
+      <div class="section-title">سناریوها</div>
+      <div class="scenarios">
         <div class="scenario tone-bull">
           <div class="scenario-head"><span>صعودی</span><span>${escapeHtml(analysis.bullish_scenario_probability || 0)}%</span></div>
           <p>${escapeHtml(analysis.bullish_scenario || "نامشخص")}</p>
-          <div class="targets">${escapeHtml((analysis.bullish_targets || []).map(formatPrice).join(" | "))}</div>
         </div>
         ${
           showNeutral
@@ -661,45 +470,13 @@ function buildAnalysisCardHtml(analysis, candles = []) {
         <div class="scenario tone-bear">
           <div class="scenario-head"><span>نزولی</span><span>${escapeHtml(analysis.bearish_scenario_probability || 0)}%</span></div>
           <p>${escapeHtml(analysis.bearish_scenario || "نامشخص")}</p>
-          <div class="targets">${escapeHtml((analysis.bearish_targets || []).map(formatPrice).join(" | "))}</div>
         </div>
       </div>
     </div>
 
-    <div class="indicators">${indicatorHtml}</div>
-
-    <div class="strategies">
-      <div class="strategy long">
-        <div class="strategy-title">استراتژی بلندمدت</div>
-        <div class="strategy-body">${escapeHtml(analysis.long_term_strategy || "نامشخص")}</div>
-      </div>
-      <div class="strategy short">
-        <div class="strategy-title">استراتژی کوتاه‌مدت</div>
-        <div class="strategy-body">${escapeHtml(analysis.short_term_strategy || "نامشخص")}</div>
-      </div>
-    </div>
-
-    <div class="summary-bar">
-      <div class="summary-item">
-        <div class="k">روند بلندمدت</div>
-        <div class="v" style="color:#34d399">${escapeHtml(analysis.long_term_trend || "نامشخص")}</div>
-      </div>
-      <div class="summary-item">
-        <div class="k">روند کوتاه‌مدت</div>
-        <div class="v" style="color:#fbbf24">${escapeHtml(analysis.short_term_trend || "نامشخص")}</div>
-      </div>
-      <div class="summary-item">
-        <div class="k">احتمال ادامه صعودی</div>
-        <div class="v" style="color:#34d399">${escapeHtml(analysis.bullish_probability || 0)}%</div>
-      </div>
-      <div class="summary-item">
-        <div class="k">ریسک اصلاح کوتاه‌مدت</div>
-        <div class="v" style="color:#f87171">${escapeHtml(analysis.correction_probability || analysis.bearish_probability || 0)}%</div>
-      </div>
-    </div>
-
+    <div class="fill"></div>
     <div class="disclaimer">
-      این تصویر صرفاً تحلیل وضعیت بازار است و سیگنال خرید/فروش یا توصیه مالی محسوب نمی‌شود.
+      این تصویر فقط تحلیل وضعیت بازار است و سیگنال خرید/فروش نیست.
     </div>
   </div>
 </body>
