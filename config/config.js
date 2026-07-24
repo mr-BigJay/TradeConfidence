@@ -27,7 +27,7 @@ const jsonMode = parseBoolean(
 
 const imageAuthScheme = (process.env.IMAGE_AUTH_SCHEME || authScheme || "apikey").toLowerCase();
 const imageBaseURL = (process.env.IMAGE_BASE_URL || "").replace(/\/$/, "");
-const cardMode = (process.env.CARD_MODE || "api").toLowerCase();
+const cardMode = (process.env.CARD_MODE || "html").toLowerCase();
 
 module.exports = {
   coinex: {

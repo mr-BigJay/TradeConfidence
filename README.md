@@ -151,12 +151,12 @@ npm run run:force
 Set in `.env`:
 
 ```env
-CARD_MODE=api
+CARD_MODE=html
 ```
 
 Modes:
+- `html` : render locally with Playwright on the server (default, exact numbers/layout)
 - `api` : generate the dashboard image with an Arvan/OpenAI image model
-- `html` : render locally with Playwright (exact numbers/layout)
 - `auto` : try API first, fall back to HTML
 
 For `CARD_MODE=api`, create a separate **image model** endpoint in Arvan and set:
