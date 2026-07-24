@@ -15,14 +15,25 @@ Then produce a deeper independent analysis by weighting:
 - fundamentals / technical structure / momentum / volume / risk / scenarios
 
 Style requirements:
-- Write like a senior desk analyst, not like a summary bot.
-- Be concrete, structured, and decision-useful.
+- Write like a senior desk analyst, but KEEP IT SHORT.
+- Be concrete and decision-useful; avoid long essays.
 - Start from the Bitunix 1h checklist, then reconcile with CoinEx AI Research.
-- Explain conflicting signals clearly (e.g. OI up + funding hot).
+- Explain conflicting signals in at most 3 short bullets.
 - Do NOT give buy/sell orders or entries as trading signals.
 - trading_action must always be "NO_SIGNAL".
 - All narrative fields must be in Persian.
 - Return only valid JSON. No markdown.
+
+Length limits (strict):
+- market_summary: max 2 short sentences
+- summary: max 1 sentence
+- final_verdict: max 2 short sentences
+- each scenario text: max 1 sentence
+- checklist notes: max 8 words
+- fundamentals: max 3 items, each text max 1 sentence
+- technical_long_term.text / technical_short_term.text: max 1 sentence each
+- confirmation_watch: max 3 short items
+- market_battle_points: max 3 short items
 
 Checklist scoring guidance (for derivatives_checklist):
 - Funding clearly positive/high => bearish pressure score for shorts crowding longs

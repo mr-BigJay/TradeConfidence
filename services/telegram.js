@@ -22,119 +22,81 @@ function joinLines(items, bullet = "•") {
   return (items || []).map((item) => `${bullet} ${item}`).join("\n");
 }
 
+/**
+ * Compact Telegram report:
+ * header → checklist → conflict → scores → verdict
+ * Avoids long fundamental/technical essays that make the feed noisy.
+ */
 function formatDeepAnalysisMessage(analysis) {
-  const fundamentals = (analysis.fundamentals || [])
-    .map(
-      (item) =>
-        `${toneEmoji(item.tone)} ${item.title}\n${item.text}`,
-    )
-    .join("\n\n");
-
-  const longPositives = joinLines(analysis.technical_long_term?.positives || [], "✅");
-  const longWarnings = joinLines(analysis.technical_long_term?.warnings || [], "⚠️");
-  const shortPoints = joinLines(analysis.technical_short_term?.points || []);
-  const battlePoints = joinLines(analysis.market_battle_points || []);
-
-  const indicators = (analysis.indicators || [])
-    .map((item) => `${toneEmoji(item.tone)} ${item.name}: ${item.status}`)
+  const checklist = (analysis.derivatives_checklist || [])
+    .slice(0, 6)
+    .map((item) => `${toneEmoji(item.tone)} ${item.name}: ${item.value} → ${item.result}`)
     .join("\n");
 
-  const checklist = (analysis.derivatives_checklist || [])
-    .map(
-      (item) =>
-        `${toneEmoji(item.tone)} ${item.name}: ${item.value} → ${item.result}${
-          item.note ? `\n${item.note}` : ""
-        }`,
-    )
-    .join("\n\n");
+  const battlePoints = joinLines((analysis.market_battle_points || []).slice(0, 3), "•");
+  const confirmationWatch = joinLines((analysis.confirmation_watch || []).slice(0, 3), "•");
+  const supports = (analysis.key_support || []).slice(0, 3).join(" | ") || "نامشخص";
+  const resistances = (analysis.key_resistance || []).slice(0, 3).join(" | ") || "نامشخص";
 
-  const confirmationWatch = joinLines(analysis.confirmation_watch || [], "•");
+  const summary =
+    analysis.summary ||
+    analysis.market_summary ||
+    analysis.final_verdict ||
+    "نامشخص";
+
+  const verdict = analysis.final_verdict || analysis.summary || "نامشخص";
+
+  const scoreLine =
+    analysis.long_score !== null && analysis.long_score !== undefined
+      ? `لانگ ${analysis.long_score}/10  |  شورت ${analysis.short_score ?? "-"}/10`
+      : null;
 
   return [
-    `# ${analysis.title || "تحلیل اختصاصی BTC"}`,
+    `${analysis.pair_label || analysis.symbol} — وضعیت بازار`,
+    `بایاس: ${analysis.bias || "خنثی"} | اطمینان: ${analysis.confidence || 0}% | قیمت: ${analysis.current_price || "-"}`,
     "",
-    `تاریخ: ${new Date().toISOString().replace("T", " ").slice(0, 16)} UTC`,
-    `بایاس: ${analysis.bias} | اطمینان: ${analysis.confidence}%`,
+    "چک‌لیست ۱ ساعته",
+    checklist || "داده Bitunix موجود نبود",
+    scoreLine ? `\n${scoreLine}` : "",
     "",
-    "## خلاصه بازار",
-    analysis.market_summary || analysis.summary || "نامشخص",
-    battlePoints ? `\nنبرد اصلی بازار:\n${battlePoints}` : "",
-    analysis.regime ? `\nفاز فعلی: ${analysis.regime}` : "",
+    "خلاصه",
+    summary,
+    battlePoints ? `\nتضاد/نبرد اصلی:\n${battlePoints}` : "",
     "",
-    "# چک‌لیست مشتقه (Bitunix / 1h)",
-    checklist || "داده Bitunix در این اجرا موجود نبود",
-    analysis.long_score !== null && analysis.long_score !== undefined
-      ? `\nامتیاز لانگ: ${analysis.long_score}/10 | امتیاز شورت: ${analysis.short_score ?? "-"}/10`
-      : "",
-    confirmationWatch ? `\nنشانه‌های تأیید/هشدار:\n${confirmationWatch}` : "",
+    "سطوح",
+    `حمایت: ${supports}`,
+    `مقاومت: ${resistances}`,
+    analysis.current_range ? `محدوده: ${analysis.current_range}` : "",
     "",
-    "# تحلیل فاندامنتال",
-    fundamentals || "داده‌ای موجود نیست",
-    "",
-    "# تحلیل تکنیکال",
-    "",
-    "## روند بلندمدت",
-    `وضعیت: ${analysis.technical_long_term?.bias || analysis.long_term_trend || "نامشخص"}`,
-    analysis.technical_long_term?.text || "",
-    longPositives ? `\nنکات مثبت:\n${longPositives}` : "",
-    longWarnings ? `\nهشدارها:\n${longWarnings}` : "",
-    "",
-    "## روند کوتاه‌مدت",
-    `وضعیت: ${analysis.technical_short_term?.bias || analysis.short_term_trend || "نامشخص"}`,
-    analysis.technical_short_term?.text || "",
-    shortPoints ? `\n${shortPoints}` : "",
-    "",
-    "# سطوح مهم بازار",
-    "",
-    "## حمایت‌ها",
-    joinLines(analysis.key_support || [], "🟢") || "نامشخص",
-    "",
-    "## مقاومت‌ها",
-    joinLines(analysis.key_resistance || [], "🔴") || "نامشخص",
-    "",
-    `محدوده فعلی: ${analysis.current_range || "نامشخص"}`,
-    "",
-    "# سناریوهای احتمالی",
-    "",
-    `## 🟢 سناریوی صعودی (${analysis.bullish_scenario_probability || 0}%)`,
-    analysis.bullish_scenario || "نامشخص",
-    analysis.bullish_targets?.length ? `اهداف: ${analysis.bullish_targets.join(" | ")}` : "",
-    "",
+    "سناریو",
+    `🟢 صعودی ${analysis.bullish_scenario_probability || 0}% — ${analysis.bullish_scenario || "نامشخص"}`,
     Number(analysis.neutral_scenario_probability) > 0
-      ? `## 🟠 سناریوی خنثی (${analysis.neutral_scenario_probability}%)\n${analysis.neutral_scenario || "نامشخص"}\n`
+      ? `🟠 خنثی ${analysis.neutral_scenario_probability}% — ${analysis.neutral_scenario || "نامشخص"}`
       : "",
-    `## 🔴 سناریوی نزولی (${analysis.bearish_scenario_probability || 0}%)`,
-    analysis.bearish_scenario || "نامشخص",
-    analysis.bearish_targets?.length ? `اهداف: ${analysis.bearish_targets.join(" | ")}` : "",
+    `🔴 نزولی ${analysis.bearish_scenario_probability || 0}% — ${analysis.bearish_scenario || "نامشخص"}`,
     "",
-    "# ارزیابی اندیکاتورها",
-    indicators || "نامشخص",
+    "جمع‌بندی",
+    verdict,
+    confirmationWatch ? `\nبرای تغییر وضعیت، منتظر:\n${confirmationWatch}` : "",
     "",
-    "# جمع‌بندی",
-    analysis.final_verdict || analysis.summary || "نامشخص",
-    "",
-    "**نتیجه نهایی:**",
-    `• روند بلندمدت: ${analysis.long_term_trend || "نامشخص"} با احتمال ${analysis.bullish_probability}%`,
-    `• روند کوتاه‌مدت: ${analysis.short_term_trend || "نامشخص"}`,
-    `• احتمال شکست مقاومت در ۲۴ تا ۴۸ ساعت آینده: ${analysis.breakout_probability_24_48h || 0}%`,
-    `• احتمال اصلاح: ${analysis.correction_probability || analysis.bearish_probability || 0}%`,
-    analysis.invalidation_level
-      ? `• تا وقتی بالای ${analysis.invalidation_level} بماند، اصلاح‌ها بخشی از ساختار بزرگ‌تر دیده می‌شوند.`
-      : "",
-    "",
-    "⚠️ این گزارش سیگنال خرید/فروش نیست و فقط تحلیل وضعیت بازار است.",
+    "⚠️ سیگنال خرید/فروش نیست؛ فقط وضعیت بازار.",
   ]
     .filter((line) => line !== "")
     .join("\n");
 }
 
 function formatCardCaption(analysis) {
+  const score =
+    analysis.long_score !== null && analysis.long_score !== undefined
+      ? ` | L ${analysis.long_score}/S ${analysis.short_score ?? "-"}`
+      : "";
+
   return [
-    `📊 ${analysis.pair_label || analysis.symbol} — کارت تحلیل وضعیت`,
-    `بایاس: ${analysis.bias} | اطمینان: ${analysis.confidence}%`,
+    `${analysis.pair_label || analysis.symbol} — کارت وضعیت`,
+    `بایاس: ${analysis.bias || "خنثی"} | ${analysis.confidence || 0}%${score}`,
     `محدوده: ${analysis.current_range || "نامشخص"}`,
     "",
-    "گزارش کامل در پیام بعدی ارسال می‌شود.",
+    "گزارش کوتاه در پیام بعد.",
     "⚠️ سیگنال خرید/فروش نیست.",
   ].join("\n");
 }
@@ -148,16 +110,16 @@ function splitTelegramText(text, maxLength = 3500) {
   let remaining = text;
 
   while (remaining.length > maxLength) {
-    let splitAt = remaining.lastIndexOf("\n\n", maxLength);
-    if (splitAt < maxLength * 0.5) {
-      splitAt = remaining.lastIndexOf("\n", maxLength);
+    let cut = remaining.lastIndexOf("\n\n", maxLength);
+    if (cut < maxLength * 0.5) {
+      cut = remaining.lastIndexOf("\n", maxLength);
     }
-    if (splitAt < maxLength * 0.5) {
-      splitAt = maxLength;
+    if (cut < maxLength * 0.5) {
+      cut = maxLength;
     }
 
-    chunks.push(remaining.slice(0, splitAt).trim());
-    remaining = remaining.slice(splitAt).trim();
+    chunks.push(remaining.slice(0, cut).trim());
+    remaining = remaining.slice(cut).trim();
   }
 
   if (remaining) {
@@ -170,22 +132,22 @@ function splitTelegramText(text, maxLength = 3500) {
 async function sendTelegramMessage(text) {
   requireTelegramConfig();
 
-  const url = `https://api.telegram.org/bot${config.telegram.botToken}/sendMessage`;
-  const response = await fetch(url, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
+  const response = await fetch(
+    `https://api.telegram.org/bot${config.telegram.botToken}/sendMessage`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        chat_id: config.telegram.chatId,
+        text,
+        disable_web_page_preview: true,
+      }),
     },
-    body: JSON.stringify({
-      chat_id: config.telegram.chatId,
-      text,
-      disable_web_page_preview: true,
-    }),
-  });
+  );
 
-  const payload = await response.json().catch(() => ({}));
-  if (!response.ok || payload.ok === false) {
-    throw new Error(`Telegram error: ${payload.description || response.statusText}`);
+  const payload = await response.json();
+  if (!payload.ok) {
+    throw new Error(`Telegram sendMessage failed: ${payload.description || response.status}`);
   }
 
   return payload;
@@ -196,23 +158,25 @@ async function sendTelegramPhoto(imagePath, caption) {
 
   const absolutePath = path.resolve(imagePath);
   if (!fs.existsSync(absolutePath)) {
-    throw new Error(`Telegram photo not found: ${absolutePath}`);
+    throw new Error(`Telegram photo missing: ${absolutePath}`);
   }
 
   const form = new FormData();
-  form.append("chat_id", String(config.telegram.chatId));
-  form.append("caption", caption.slice(0, 1000));
-  form.append("photo", new Blob([fs.readFileSync(absolutePath)], { type: "image/png" }), path.basename(absolutePath));
+  form.append("chat_id", config.telegram.chatId);
+  form.append("caption", caption || "");
+  form.append("photo", new Blob([fs.readFileSync(absolutePath)]), path.basename(absolutePath));
 
-  const url = `https://api.telegram.org/bot${config.telegram.botToken}/sendPhoto`;
-  const response = await fetch(url, {
-    method: "POST",
-    body: form,
-  });
+  const response = await fetch(
+    `https://api.telegram.org/bot${config.telegram.botToken}/sendPhoto`,
+    {
+      method: "POST",
+      body: form,
+    },
+  );
 
-  const payload = await response.json().catch(() => ({}));
-  if (!response.ok || payload.ok === false) {
-    throw new Error(`Telegram photo error: ${payload.description || response.statusText}`);
+  const payload = await response.json();
+  if (!payload.ok) {
+    throw new Error(`Telegram sendPhoto failed: ${payload.description || response.status}`);
   }
 
   return payload;
@@ -220,25 +184,19 @@ async function sendTelegramPhoto(imagePath, caption) {
 
 async function sendMarketStatus(analysis, imagePath = null) {
   const deepReport = formatDeepAnalysisMessage(analysis);
-  const reportChunks = splitTelegramText(deepReport);
 
   if (imagePath) {
     await sendTelegramPhoto(imagePath, formatCardCaption(analysis));
   }
 
-  for (const chunk of reportChunks) {
+  for (const chunk of splitTelegramText(deepReport)) {
     await sendTelegramMessage(chunk);
   }
-
-  return {
-    imageSent: Boolean(imagePath),
-    chunks: reportChunks.length,
-  };
 }
 
 module.exports = {
-  formatCardCaption,
   formatDeepAnalysisMessage,
+  formatCardCaption,
   sendMarketStatus,
   sendTelegramMessage,
   sendTelegramPhoto,
