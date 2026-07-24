@@ -56,7 +56,7 @@ async function renderAnalysisCard(analysis) {
   try {
     browser = await launchBrowser();
     const page = await browser.newPage({
-      viewport: { width: 1480, height: 1180 },
+      viewport: { width: 1600, height: 1280 },
       deviceScaleFactor: scale,
     });
 
