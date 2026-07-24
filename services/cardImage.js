@@ -30,7 +30,7 @@ async function launchBrowser() {
 async function renderAnalysisCard(analysis) {
   let candles = [];
   try {
-    candles = await fetchFuturesKlines(analysis.symbol, { limit: 48 });
+    candles = await fetchFuturesKlines(analysis.symbol, { limit: 96 });
     logger.info("Fetched klines for card chart", {
       symbol: analysis.symbol,
       candles: candles.length,

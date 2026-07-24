@@ -47,8 +47,13 @@ function buildCandleSvg(candles = [], analysis = {}) {
 
   const width = 560;
   const height = 300;
-  const padX = 28;
-  const padY = 28;
+  const padLeft = 16;
+  const padRight = 78; // room for price axis label (off the candles)
+  const padY = 22;
+  const plotLeft = padLeft;
+  const plotRight = width - padRight;
+  const plotWidth = plotRight - plotLeft;
+
   const highs = candles.map((c) => c.high);
   const lows = candles.map((c) => c.low);
   const levelValues = [...(analysis.key_resistance || []), ...(analysis.key_support || [])]
@@ -58,19 +63,21 @@ function buildCandleSvg(candles = [], analysis = {}) {
   const max = Math.max(...highs, ...(levelValues.length ? levelValues : [0]));
   const min = Math.min(...lows, ...(levelValues.length ? levelValues : highs));
   const span = Math.max(max - min, 1);
-  const step = (width - padX * 2) / Math.max(candles.length - 1, 1);
+  const step = plotWidth / Math.max(candles.length, 1);
+  const bodyWidth = Math.max(1.1, Math.min(step * 0.52, 3.2));
+  const wickWidth = Math.max(0.8, Math.min(bodyWidth * 0.35, 1.4));
   const yFor = (price) => padY + ((max - price) / span) * (height - padY * 2);
 
   const grid = [0.15, 0.35, 0.55, 0.75]
     .map((ratio) => {
       const y = padY + ratio * (height - padY * 2);
-      return `<line x1="${padX}" y1="${y}" x2="${width - padX}" y2="${y}" stroke="rgba(100,116,139,0.18)" stroke-width="1" />`;
+      return `<line x1="${plotLeft}" y1="${y}" x2="${plotRight}" y2="${y}" stroke="rgba(100,116,139,0.18)" stroke-width="1" />`;
     })
     .join("");
 
   const body = candles
     .map((candle, index) => {
-      const x = padX + index * step;
+      const x = plotLeft + step * (index + 0.5);
       const yHigh = yFor(candle.high);
       const yLow = yFor(candle.low);
       const yOpen = yFor(candle.open);
@@ -78,10 +85,10 @@ function buildCandleSvg(candles = [], analysis = {}) {
       const bullish = candle.close >= candle.open;
       const color = bullish ? "#22c55e" : "#ef4444";
       const top = Math.min(yOpen, yClose);
-      const bodyHeight = Math.max(Math.abs(yClose - yOpen), 2.8);
+      const bodyHeight = Math.max(Math.abs(yClose - yOpen), 1.6);
       return `
-        <line x1="${x}" y1="${yHigh}" x2="${x}" y2="${yLow}" stroke="${color}" stroke-width="1.7" />
-        <rect x="${x - 3.8}" y="${top}" width="7.6" height="${bodyHeight}" fill="${color}" rx="1.5" />
+        <line x1="${x}" y1="${yHigh}" x2="${x}" y2="${yLow}" stroke="${color}" stroke-width="${wickWidth}" />
+        <rect x="${x - bodyWidth / 2}" y="${top}" width="${bodyWidth}" height="${bodyHeight}" fill="${color}" rx="0.6" />
       `;
     })
     .join("");
@@ -93,8 +100,8 @@ function buildCandleSvg(candles = [], analysis = {}) {
       if (price === null) return "";
       const y = yFor(price);
       return `
-        <line x1="${padX}" y1="${y}" x2="${width - padX}" y2="${y}" stroke="#ef4444" stroke-dasharray="7 5" stroke-width="1.5" opacity="0.95" />
-        <text x="${width - padX - 2}" y="${y - 6}" fill="#fca5a5" font-size="11" text-anchor="end" font-family="Vazirmatn, sans-serif">${escapeHtml(formatPrice(level))}</text>
+        <line x1="${plotLeft}" y1="${y}" x2="${plotRight}" y2="${y}" stroke="#ef4444" stroke-dasharray="6 4" stroke-width="1.2" opacity="0.85" />
+        <text x="${plotRight - 4}" y="${y - 5}" fill="#fca5a5" font-size="10" text-anchor="end" font-family="Vazirmatn, sans-serif">${escapeHtml(formatPrice(level))}</text>
       `;
     })
     .join("");
@@ -106,16 +113,16 @@ function buildCandleSvg(candles = [], analysis = {}) {
       if (price === null) return "";
       const y = yFor(price);
       return `
-        <line x1="${padX}" y1="${y}" x2="${width - padX}" y2="${y}" stroke="#22c55e" stroke-dasharray="7 5" stroke-width="1.5" opacity="0.95" />
-        <text x="${width - padX - 2}" y="${y - 6}" fill="#86efac" font-size="11" text-anchor="end" font-family="Vazirmatn, sans-serif">${escapeHtml(formatPrice(level))}</text>
+        <line x1="${plotLeft}" y1="${y}" x2="${plotRight}" y2="${y}" stroke="#22c55e" stroke-dasharray="6 4" stroke-width="1.2" opacity="0.85" />
+        <text x="${plotRight - 4}" y="${y - 5}" fill="#86efac" font-size="10" text-anchor="end" font-family="Vazirmatn, sans-serif">${escapeHtml(formatPrice(level))}</text>
       `;
     })
     .join("");
 
   const last = candles[candles.length - 1];
-  const lastX = padX + (candles.length - 1) * step;
   const lastY = yFor(last.close);
   const priceLabel = formatPrice(analysis.current_price || last.close);
+  const tagY = Math.min(Math.max(lastY - 11, 8), height - 30);
 
   return `
     <svg viewBox="0 0 ${width} ${height}" width="100%" height="300" xmlns="http://www.w3.org/2000/svg">
@@ -130,10 +137,9 @@ function buildCandleSvg(candles = [], analysis = {}) {
       ${resistanceLines}
       ${supportLines}
       ${body}
-      <line x1="${lastX}" y1="${padY}" x2="${lastX}" y2="${height - padY}" stroke="rgba(226,232,240,0.25)" stroke-dasharray="3 4" />
-      <circle cx="${lastX}" cy="${lastY}" r="5" fill="#f8fafc" stroke="#38bdf8" stroke-width="2" />
-      <rect x="${Math.min(lastX + 10, width - 108)}" y="${Math.max(lastY - 14, 10)}" rx="8" width="92" height="24" fill="#0f172a" stroke="#475569" />
-      <text x="${Math.min(lastX + 56, width - 62)}" y="${Math.max(lastY + 2, 26)}" fill="#f8fafc" font-size="12" text-anchor="middle" font-family="Vazirmatn, sans-serif" font-weight="700">${escapeHtml(priceLabel)}</text>
+      <line x1="${plotLeft}" y1="${lastY}" x2="${plotRight}" y2="${lastY}" stroke="rgba(56,189,248,0.35)" stroke-dasharray="3 3" stroke-width="1" />
+      <rect x="${plotRight + 4}" y="${tagY}" rx="6" width="70" height="22" fill="#0ea5e9" />
+      <text x="${plotRight + 39}" y="${tagY + 15}" fill="#0b1220" font-size="11" text-anchor="middle" font-family="Vazirmatn, sans-serif" font-weight="700">${escapeHtml(priceLabel)}</text>
     </svg>
   `;
 }

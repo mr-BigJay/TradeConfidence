@@ -1,4 +1,4 @@
-async function fetchFuturesKlines(symbol, { limit = 48 } = {}) {
+async function fetchFuturesKlines(symbol, { limit = 96 } = {}) {
   const market = symbol.includes("-") ? symbol : symbol.replace(/USDT$/i, "USDT");
   const url = `https://api.coinex.com/v2/futures/kline?market=${encodeURIComponent(market)}&period=1hour&limit=${limit}`;
 
