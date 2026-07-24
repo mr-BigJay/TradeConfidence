@@ -65,7 +65,7 @@ OPENAI_JSON_MODE=false
 TELEGRAM_BOT_TOKEN=
 TELEGRAM_CHAT_ID=
 
-CHECK_INTERVAL_MINUTES=30
+CHECK_INTERVAL_MINUTES=60
 COINEX_SYMBOLS=BTCUSDT
 HEADLESS=true
 ```
@@ -133,7 +133,7 @@ npm run run:once
 npm start
 ```
 
-The default schedule checks BTC every 30 minutes. If the extracted AI Research
+The default schedule checks BTC every 60 minutes. If the extracted AI Research
 text has not changed since the previous successful scrape, OpenAI and Telegram
 are skipped to avoid duplicate messages and unnecessary API cost.
 

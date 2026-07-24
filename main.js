@@ -8,8 +8,13 @@ const args = new Set(process.argv.slice(2));
 let isRunning = false;
 
 function buildCronExpression(intervalMinutes) {
+  if (intervalMinutes === 60) {
+    // Once every hour, at minute 0.
+    return "0 * * * *";
+  }
+
   if (intervalMinutes < 1 || intervalMinutes > 59) {
-    throw new Error("CHECK_INTERVAL_MINUTES must be between 1 and 59");
+    throw new Error("CHECK_INTERVAL_MINUTES must be between 1 and 60");
   }
 
   return `*/${intervalMinutes} * * * *`;

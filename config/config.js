@@ -36,7 +36,7 @@ module.exports = {
     scrapeTimeoutMs: parsePositiveInteger(process.env.SCRAPE_TIMEOUT_MS, 30000),
   },
   scheduler: {
-    intervalMinutes: parsePositiveInteger(process.env.CHECK_INTERVAL_MINUTES, 30),
+    intervalMinutes: parsePositiveInteger(process.env.CHECK_INTERVAL_MINUTES, 60),
   },
   openai: {
     apiKey: process.env.OPENAI_API_KEY,
