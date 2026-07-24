@@ -96,7 +96,7 @@ async function analyzeAiResearch({ symbol, text, previousAnalysis = null }) {
       {
         role: "system",
         content:
-          "You produce strict JSON for a deep Persian crypto desk report based only on the provided AI Research text. Write clean formal Persian. Never mention CoinEx/Bitunix/Coinglass or Persian brand variants. Never give direct buy/sell orders. Always include long_confirm, short_confirm, and trading_suggestion as risk-management stance.",
+          "You produce strict JSON for a deep Persian crypto desk report. Use ONLY the provided AI Research text as factual source. Do not invent levels, news, or indicators absent from that text. Write clean formal Persian. Never mention CoinEx/Bitunix/Coinglass or Persian brand variants. Never give direct buy/sell orders. Always include long_confirm, short_confirm, and trading_suggestion as risk-management stance grounded in the research.",
       },
       {
         role: "user",
