@@ -1,4 +1,3 @@
-const crypto = require("node:crypto");
 const fs = require("node:fs/promises");
 const path = require("node:path");
 const config = require("../config/config");
@@ -13,10 +12,7 @@ const { scrapeAiResearch } = require("../playwright/scraper");
 const { analyzeAiResearch } = require("./openai");
 const { renderAnalysisCard } = require("./cardImage");
 const { sendMarketStatus } = require("./telegram");
-
-function hashText(text) {
-  return crypto.createHash("sha256").update(text).digest("hex");
-}
+const { buildContentFingerprint, isSameResearch } = require("./contentFingerprint");
 
 function safeTimestampForFile(date = new Date()) {
   return date.toISOString().replace(/[:.]/g, "-");
@@ -58,23 +54,46 @@ async function processSymbol(symbol, options = {}) {
       return result;
     }
 
-    const textHash = hashText(scrapeResult.text);
+    const fingerprint = buildContentFingerprint(scrapeResult.text);
     const latestContent = await getLatestContent(symbol);
 
-    if (!options.force && latestContent?.text_hash === textHash) {
-      logger.info("AI Research unchanged, skipping OpenAI and Telegram", { symbol });
-      await saveEvent({ symbol, event: "no_change", message: "AI Research text has not changed" });
+    logger.info("Research fingerprint", {
+      symbol,
+      sourceUpdatedAt: fingerprint.sourceUpdatedAt,
+      contentHash: fingerprint.contentHash.slice(0, 12),
+      previousHash: latestContent?.text_hash?.slice(0, 12) || null,
+      previousSourceUpdatedAt: latestContent?.source_updated_at || null,
+    });
+
+    // Production rule: only analyze/send when CoinEx AI Research is actually new.
+    if (!options.force && isSameResearch(latestContent, fingerprint)) {
+      logger.info("No new AI Research. Skipping GPT, card, and Telegram.", {
+        symbol,
+        sourceUpdatedAt: fingerprint.sourceUpdatedAt,
+      });
+      await saveEvent({
+        symbol,
+        event: "no_change",
+        message: fingerprint.sourceUpdatedAt
+          ? `AI Research unchanged (Time: ${fingerprint.sourceUpdatedAt})`
+          : "AI Research content hash unchanged",
+      });
       result.ok = true;
       result.skipped = true;
       result.reason = "no_change";
       return result;
     }
 
+    if (options.force) {
+      logger.warn("Force mode enabled: regenerating even if AI Research is unchanged", { symbol });
+    }
+
     await saveContent({
       symbol,
-      textHash,
+      textHash: fingerprint.contentHash,
       rawText: scrapeResult.text,
       scrapedAt: scrapeResult.datetime,
+      sourceUpdatedAt: fingerprint.sourceUpdatedAt,
     });
 
     const analysis = await analyzeAiResearch({
@@ -86,7 +105,7 @@ async function processSymbol(symbol, options = {}) {
 
     await saveAnalysis({
       symbol,
-      textHash,
+      textHash: fingerprint.contentHash,
       analysis,
       createdAt: new Date().toISOString(),
     });

@@ -143,6 +143,9 @@ Force a full run even if the text is unchanged:
 npm run run:force
 ```
 
+> Use `run:force` only for manual testing. The scheduled bot never uses force.
+> Normal mode sends Telegram only when CoinEx publishes a new AI Research update.
+
 Each successful analysis also renders a Persian dashboard card image and sends it
 to Telegram via `sendPhoto`, with a short text caption. If image rendering fails,
 the bot falls back to text-only Telegram delivery.

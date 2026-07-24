@@ -6,6 +6,14 @@ const config = require("../config/config");
 
 let db;
 
+async function ensureColumn(database, tableName, columnName, definition) {
+  const columns = await database.all(`PRAGMA table_info(${tableName})`);
+  const exists = columns.some((column) => column.name === columnName);
+  if (!exists) {
+    await database.exec(`ALTER TABLE ${tableName} ADD COLUMN ${columnName} ${definition}`);
+  }
+}
+
 async function getDb() {
   if (db) {
     return db;
@@ -25,7 +33,8 @@ async function getDb() {
       symbol TEXT NOT NULL,
       text_hash TEXT NOT NULL,
       raw_text TEXT NOT NULL,
-      scraped_at TEXT NOT NULL
+      scraped_at TEXT NOT NULL,
+      source_updated_at TEXT
     );
 
     CREATE INDEX IF NOT EXISTS idx_content_history_symbol_time
@@ -48,6 +57,8 @@ async function getDb() {
     );
   `);
 
+  await ensureColumn(db, "content_history", "source_updated_at", "TEXT");
+
   return db;
 }
 
@@ -60,15 +71,18 @@ async function getLatestContent(symbol) {
   );
 }
 
-async function saveContent({ symbol, textHash, rawText, scrapedAt }) {
+async function saveContent({ symbol, textHash, rawText, scrapedAt, sourceUpdatedAt = null }) {
   const database = await getDb();
 
   return database.run(
-    "INSERT INTO content_history (symbol, text_hash, raw_text, scraped_at) VALUES (?, ?, ?, ?)",
+    `INSERT INTO content_history
+      (symbol, text_hash, raw_text, scraped_at, source_updated_at)
+     VALUES (?, ?, ?, ?, ?)`,
     symbol,
     textHash,
     rawText,
     scrapedAt,
+    sourceUpdatedAt,
   );
 }
 
