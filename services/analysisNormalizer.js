@@ -171,7 +171,7 @@ function asConfirmBlock(value, fallbackZone = "نامشخص") {
   const block = value && typeof value === "object" ? value : {};
   return {
     zone: String(block.zone || fallbackZone).trim() || fallbackZone,
-    how: uniqueStrings(block.how || block.conditions || [], 5),
+    how: uniqueStrings(block.how || block.conditions || [], 3),
     invalidation: String(block.invalidation || "").trim(),
   };
 }

@@ -462,7 +462,7 @@ function buildAnalysisCardHtml(analysis, candles = []) {
         <div class="logo">₿</div>
         <div>
           <div class="pair">${escapeHtml(analysis.pair_label || analysis.symbol)}</div>
-          <div class="sub">وضعیت بازار · تایم‌فریم ۱H</div>
+          <div class="sub">نقشه راه CoinEx · تأیید Bitunix 1H</div>
         </div>
       </div>
       <div class="meta-top">${escapeHtml(date)}<br>${escapeHtml(time)}</div>
@@ -495,7 +495,7 @@ function buildAnalysisCardHtml(analysis, candles = []) {
     </div>
 
     <div class="panel">
-      <div class="section-title">چک‌لیست مشتقه (Bitunix / 1H)</div>
+      <div class="section-title">تأیید Bitunix (1H)</div>
       ${buildChecklistRows(analysis)}
     </div>
 
@@ -505,7 +505,7 @@ function buildAnalysisCardHtml(analysis, candles = []) {
     </div>
 
     <div class="panel">
-      <div class="section-title">خلاصه</div>
+      <div class="section-title">نقشه راه CoinEx</div>
       <div class="summary">${escapeHtml(summary)}</div>
     </div>
 

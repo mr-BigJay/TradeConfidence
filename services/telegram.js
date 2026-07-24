@@ -2,6 +2,9 @@ const fs = require("node:fs");
 const path = require("node:path");
 const config = require("../config/config");
 
+// Keep the whole text report inside one Telegram message.
+const TELEGRAM_SINGLE_MESSAGE_LIMIT = 3500;
+
 function requireTelegramConfig() {
   if (!config.telegram.botToken) {
     throw new Error("TELEGRAM_BOT_TOKEN is missing");
@@ -38,48 +41,52 @@ function joinLines(items, bullet = "•") {
   return (items || []).map((item) => `${bullet} ${item}`).join("\n");
 }
 
+function clip(text, max) {
+  const value = String(text || "").trim();
+  if (value.length <= max) return value;
+  return `${value.slice(0, Math.max(0, max - 1)).trim()}…`;
+}
+
 /**
- * Compact Telegram report:
- * header → checklist → conflict → scores → verdict
- * Avoids long fundamental/technical essays that make the feed noisy.
+ * One compact Telegram message:
+ * CoinEx roadmap first, Bitunix confirmation second, then long/short confirms.
  */
 function formatDeepAnalysisMessage(analysis) {
   const checklist = uniqueChecklist(analysis.derivatives_checklist)
     .map((item) => `${toneEmoji(item.tone)} ${item.name}: ${item.value} → ${item.result}`)
     .join("\n");
 
-  const battlePoints = joinLines((analysis.market_battle_points || []).slice(0, 4), "•");
+  const battlePoints = joinLines((analysis.market_battle_points || []).slice(0, 3), "•");
   const supports = (analysis.key_support || []).slice(0, 3).join(" | ") || "نامشخص";
   const resistances = (analysis.key_resistance || []).slice(0, 3).join(" | ") || "نامشخص";
 
-  const summary =
-    analysis.market_summary ||
-    analysis.summary ||
-    analysis.final_verdict ||
-    "نامشخص";
+  const roadmap = clip(
+    analysis.market_summary || analysis.summary || analysis.final_verdict || "نامشخص",
+    420,
+  );
+  const verdict = clip(analysis.final_verdict || analysis.summary || "نامشخص", 280);
 
-  const verdict = analysis.final_verdict || analysis.summary || "نامشخص";
   const longConfirm = analysis.long_confirm || {};
   const shortConfirm = analysis.short_confirm || {};
-  const longHow = joinLines(longConfirm.how || [], "•");
-  const shortHow = joinLines(shortConfirm.how || [], "•");
+  const longHow = joinLines((longConfirm.how || []).slice(0, 3), "•");
+  const shortHow = joinLines((shortConfirm.how || []).slice(0, 3), "•");
 
   const scoreLine =
     analysis.long_score !== null && analysis.long_score !== undefined
-      ? `لانگ ${analysis.long_score}/10  |  شورت ${analysis.short_score ?? "-"}/10`
+      ? `لانگ ${analysis.long_score}/10 | شورت ${analysis.short_score ?? "-"}/10`
       : null;
 
-  return [
+  const message = [
     `${analysis.pair_label || analysis.symbol} — وضعیت بازار`,
     `بایاس: ${analysis.bias || "خنثی"} | اطمینان: ${analysis.confidence || 0}% | قیمت: ${analysis.current_price || "-"}`,
     "",
-    "چک‌لیست ۱ ساعته",
-    checklist || "داده Bitunix موجود نبود",
-    scoreLine ? `\n${scoreLine}` : "",
+    "نقشه راه CoinEx",
+    roadmap,
+    battlePoints ? `\nنکات کلیدی:\n${battlePoints}` : "",
     "",
-    "توضیح وضعیت",
-    summary,
-    battlePoints ? `\nتضاد/نبرد اصلی:\n${battlePoints}` : "",
+    "تأیید Bitunix (1H)",
+    checklist || "داده Bitunix موجود نبود",
+    scoreLine || "",
     "",
     "سطوح",
     `حمایت: ${supports}`,
@@ -87,73 +94,44 @@ function formatDeepAnalysisMessage(analysis) {
     analysis.current_range ? `محدوده: ${analysis.current_range}` : "",
     "",
     "سناریو",
-    `🟢 صعودی ${analysis.bullish_scenario_probability || 0}% — ${analysis.bullish_scenario || "نامشخص"}`,
+    `🟢 صعودی ${analysis.bullish_scenario_probability || 0}% — ${clip(analysis.bullish_scenario, 160)}`,
     Number(analysis.neutral_scenario_probability) > 0
-      ? `🟠 خنثی ${analysis.neutral_scenario_probability}% — ${analysis.neutral_scenario || "نامشخص"}`
+      ? `🟠 خنثی ${analysis.neutral_scenario_probability}% — ${clip(analysis.neutral_scenario, 120)}`
       : "",
-    `🔴 نزولی ${analysis.bearish_scenario_probability || 0}% — ${analysis.bearish_scenario || "نامشخص"}`,
+    `🔴 نزولی ${analysis.bearish_scenario_probability || 0}% — ${clip(analysis.bearish_scenario, 160)}`,
     "",
-    "تأییدیه سناریوی لانگ",
-    `کجا: ${longConfirm.zone || "نامشخص"}`,
-    longHow ? `چطور:\n${longHow}` : "",
-    longConfirm.invalidation ? `باطل‌کننده: ${longConfirm.invalidation}` : "",
+    "تأیید لانگ",
+    `کجا: ${clip(longConfirm.zone, 120)}`,
+    longHow || "",
+    longConfirm.invalidation ? `باطل: ${clip(longConfirm.invalidation, 100)}` : "",
     "",
-    "تأییدیه سناریوی شورت",
-    `کجا: ${shortConfirm.zone || "نامشخص"}`,
-    shortHow ? `چطور:\n${shortHow}` : "",
-    shortConfirm.invalidation ? `باطل‌کننده: ${shortConfirm.invalidation}` : "",
+    "تأیید شورت",
+    `کجا: ${clip(shortConfirm.zone, 120)}`,
+    shortHow || "",
+    shortConfirm.invalidation ? `باطل: ${clip(shortConfirm.invalidation, 100)}` : "",
     "",
     "جمع‌بندی",
     verdict,
     "",
-    "⚠️ دستور ورود نیست؛ فقط شرایط تأیید سناریو برای مدیریت ریسک.",
+    "⚠️ دستور ورود نیست؛ فقط شرایط تأیید سناریو.",
   ]
     .filter((line) => line !== "")
     .join("\n");
+
+  return clip(message, TELEGRAM_SINGLE_MESSAGE_LIMIT);
 }
 
 function formatCardCaption(analysis) {
   const score =
     analysis.long_score !== null && analysis.long_score !== undefined
-      ? ` | L ${analysis.long_score}/S ${analysis.short_score ?? "-"}`
+      ? ` | L${analysis.long_score}/S${analysis.short_score ?? "-"}`
       : "";
 
-  return [
-    `${analysis.pair_label || analysis.symbol} — کارت وضعیت`,
-    `بایاس: ${analysis.bias || "خنثی"} | ${analysis.confidence || 0}%${score}`,
-    `محدوده: ${analysis.current_range || "نامشخص"}`,
-    "",
-    "گزارش کوتاه در پیام بعد.",
-    "⚠️ سیگنال خرید/فروش نیست.",
-  ].join("\n");
-}
-
-function splitTelegramText(text, maxLength = 3500) {
-  if (text.length <= maxLength) {
-    return [text];
-  }
-
-  const chunks = [];
-  let remaining = text;
-
-  while (remaining.length > maxLength) {
-    let cut = remaining.lastIndexOf("\n\n", maxLength);
-    if (cut < maxLength * 0.5) {
-      cut = remaining.lastIndexOf("\n", maxLength);
-    }
-    if (cut < maxLength * 0.5) {
-      cut = maxLength;
-    }
-
-    chunks.push(remaining.slice(0, cut).trim());
-    remaining = remaining.slice(cut).trim();
-  }
-
-  if (remaining) {
-    chunks.push(remaining);
-  }
-
-  return chunks;
+  // Keep caption tiny; full report is one separate message only.
+  return clip(
+    `${analysis.pair_label || analysis.symbol} | ${analysis.bias || "خنثی"} | ${analysis.confidence || 0}%${score}`,
+    200,
+  );
 }
 
 async function sendTelegramMessage(text) {
@@ -210,15 +188,14 @@ async function sendTelegramPhoto(imagePath, caption) {
 }
 
 async function sendMarketStatus(analysis, imagePath = null) {
-  const deepReport = formatDeepAnalysisMessage(analysis);
+  const report = formatDeepAnalysisMessage(analysis);
 
   if (imagePath) {
     await sendTelegramPhoto(imagePath, formatCardCaption(analysis));
   }
 
-  for (const chunk of splitTelegramText(deepReport)) {
-    await sendTelegramMessage(chunk);
-  }
+  // Always exactly one text message (never split into 2+).
+  await sendTelegramMessage(report);
 }
 
 module.exports = {
