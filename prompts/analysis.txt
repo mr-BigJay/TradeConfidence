@@ -49,14 +49,22 @@ JSON schema:
   "long_score": 3.5,
   "short_score": 7.0,
   "long_confirm": {
-    "zone": "level/zone from research tips",
-    "how": ["conditions implied by research"],
-    "invalidation": "invalidation from research levels"
+    "zone": "مثلاً بازپس‌گیری و تثبیت بالای 64800-65000",
+    "how": [
+      "شرط ساده ۱ از روی گزارش پژوهشی",
+      "شرط ساده ۲",
+      "شرط ساده ۳"
+    ],
+    "invalidation": "باطل شدن سناریوی لانگ با سطح مشخص"
   },
   "short_confirm": {
-    "zone": "level/zone from research tips",
-    "how": ["conditions implied by research"],
-    "invalidation": "invalidation from research levels"
+    "zone": "مثلاً ناتوانی در بازپس‌گیری 65000 یا شکست 63700",
+    "how": [
+      "شرط ساده ۱ از روی گزارش پژوهشی",
+      "شرط ساده ۲",
+      "شرط ساده ۳"
+    ],
+    "invalidation": "باطل شدن سناریوی شورت با سطح مشخص"
   },
   "confirmation_watch": ["watchpoints from research"],
   "fundamentals": [
