@@ -2,7 +2,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const config = require("../config/config");
 
-const TELEGRAM_MESSAGE_LIMIT = 3500;
+const TELEGRAM_MESSAGE_LIMIT = 3900;
 
 function requireTelegramConfig() {
   if (!config.telegram.botToken) {
@@ -31,18 +31,50 @@ function clip(text, max) {
   return `${value.slice(0, Math.max(0, max - 1)).trim()}…`;
 }
 
+function splitTelegramText(text, maxLength = TELEGRAM_MESSAGE_LIMIT) {
+  if (text.length <= maxLength) {
+    return [text];
+  }
+
+  const chunks = [];
+  let remaining = text;
+
+  while (remaining.length > maxLength) {
+    let cut = remaining.lastIndexOf("\n\n", maxLength);
+    if (cut < maxLength * 0.45) {
+      cut = remaining.lastIndexOf("\n", maxLength);
+    }
+    if (cut < maxLength * 0.45) {
+      cut = maxLength;
+    }
+    chunks.push(remaining.slice(0, cut).trim());
+    remaining = remaining.slice(cut).trim();
+  }
+
+  if (remaining) {
+    chunks.push(remaining);
+  }
+
+  return chunks;
+}
+
 /**
- * Short practical Persian note:
- * what is happening + what user should do + simple long/short confirmations.
+ * Medium-length practical Persian analysis for normal users.
  */
 function formatDeepAnalysisMessage(analysis) {
   const supports = (analysis.key_support || []).slice(0, 3).join(" | ") || "نامشخص";
   const resistances = (analysis.key_resistance || []).slice(0, 3).join(" | ") || "نامشخص";
-  const battlePoints = joinLines((analysis.market_battle_points || []).slice(0, 2), "•");
+  const battlePoints = joinLines((analysis.market_battle_points || []).slice(0, 3), "•");
+
   const fundamentals = (analysis.fundamentals || [])
     .slice(0, 3)
-    .map((item) => `${toneEmoji(item.tone)} ${item.title}: ${clip(item.text, 90)}`)
-    .join("\n");
+    .map((item) => `${toneEmoji(item.tone)} ${item.title}\n${clip(item.text, 180)}`)
+    .join("\n\n");
+
+  const longTech = clip(analysis.technical_long_term?.text || "", 220);
+  const shortTech = clip(analysis.technical_short_term?.text || "", 220);
+  const longWarnings = joinLines((analysis.technical_long_term?.warnings || []).slice(0, 3), "•");
+  const shortPoints = joinLines((analysis.technical_short_term?.points || []).slice(0, 3), "•");
 
   const longConfirm = analysis.long_confirm || {};
   const shortConfirm = analysis.short_confirm || {};
@@ -51,48 +83,64 @@ function formatDeepAnalysisMessage(analysis) {
 
   const whatToDo = clip(
     analysis.trading_suggestion || analysis.short_term_strategy || analysis.final_verdict || "",
-    220,
+    320,
   );
 
-  const message = [
-    `${analysis.pair_label || analysis.symbol} — وضعیت بازار`,
+  const verdict = clip(analysis.final_verdict || analysis.summary || "", 320);
+
+  return [
+    `${analysis.pair_label || analysis.symbol} — تحلیل وضعیت بازار`,
     `بایاس: ${analysis.bias || "خنثی"} | اطمینان: ${analysis.confidence || 0}% | قیمت: ${analysis.current_price || "-"}`,
     "",
-    "الان بازار چه وضعی دارد؟",
-    clip(analysis.market_summary || analysis.summary || "نامشخص", 220),
-    battlePoints ? `\n${battlePoints}` : "",
+    "وضعیت فعلی",
+    clip(analysis.market_summary || analysis.summary || "نامشخص", 520),
+    battlePoints ? `\nنکات کلیدی:\n${battlePoints}` : "",
     "",
-    fundamentals ? `نکات مهم:\n${fundamentals}\n` : "",
+    fundamentals ? `عوامل مهم:\n${fundamentals}\n` : "",
+    "نگاه تکنیکال",
+    longTech
+      ? `بلندمدت (${analysis.technical_long_term?.bias || analysis.long_term_trend || "نامشخص"}):\n${longTech}`
+      : "",
+    longWarnings ? `${longWarnings}` : "",
+    shortTech
+      ? `\nکوتاه‌مدت (${analysis.technical_short_term?.bias || analysis.short_term_trend || "نامشخص"}):\n${shortTech}`
+      : "",
+    shortPoints ? `${shortPoints}` : "",
+    "",
     "سطوح مهم",
     `حمایت: ${supports}`,
     `مقاومت: ${resistances}`,
     analysis.current_range ? `محدوده: ${analysis.current_range}` : "",
     "",
-    "کاربر الان چه کار کند؟",
-    whatToDo || "صبر کند و سطوح بالا را رصد کند.",
+    "الان چه کار کنی؟",
+    whatToDo || "عجله نکن و همین سطوح را رصد کن.",
     "",
     "سناریوها",
-    `🔴 شورت/نزولی (${analysis.bearish_scenario_probability || 0}%): ${clip(analysis.bearish_scenario, 120)}`,
-    `🟢 لانگ/صعودی (${analysis.bullish_scenario_probability || 0}%): ${clip(analysis.bullish_scenario, 120)}`,
+    `🔴 نزولی (${analysis.bearish_scenario_probability || 0}%):\n${clip(analysis.bearish_scenario, 220)}`,
+    analysis.bearish_targets?.length ? `اهداف: ${analysis.bearish_targets.join(" | ")}` : "",
+    "",
+    `🟢 صعودی (${analysis.bullish_scenario_probability || 0}%):\n${clip(analysis.bullish_scenario, 220)}`,
+    analysis.bullish_targets?.length ? `اهداف: ${analysis.bullish_targets.join(" | ")}` : "",
     "",
     "چطور ورود تأیید می‌شود؟",
     "",
-    `🟢 لانگ`,
-    `کجا: ${clip(longConfirm.zone, 100)}`,
+    "🟢 لانگ",
+    `کجا: ${clip(longConfirm.zone, 140)}`,
     longHow ? `چطور:\n${longHow}` : "",
-    longConfirm.invalidation ? `باطل اگر: ${clip(longConfirm.invalidation, 90)}` : "",
+    longConfirm.invalidation ? `باطل اگر: ${clip(longConfirm.invalidation, 120)}` : "",
     "",
-    `🔴 شورت`,
-    `کجا: ${clip(shortConfirm.zone, 100)}`,
+    "🔴 شورت",
+    `کجا: ${clip(shortConfirm.zone, 140)}`,
     shortHow ? `چطور:\n${shortHow}` : "",
-    shortConfirm.invalidation ? `باطل اگر: ${clip(shortConfirm.invalidation, 90)}` : "",
+    shortConfirm.invalidation ? `باطل اگر: ${clip(shortConfirm.invalidation, 120)}` : "",
+    "",
+    "جمع‌بندی",
+    verdict || "نامشخص",
     "",
     "⚠️ سیگنال قطعی خرید/فروش نیست؛ راهنمای رصد سناریو است.",
   ]
     .filter((line) => line !== "")
     .join("\n");
-
-  return clip(message, TELEGRAM_MESSAGE_LIMIT);
 }
 
 function formatCardCaption(analysis) {
@@ -162,8 +210,9 @@ async function sendMarketStatus(analysis, imagePath = null) {
     await sendTelegramPhoto(imagePath, formatCardCaption(analysis));
   }
 
-  // Keep as one practical Telegram message.
-  await sendTelegramMessage(report);
+  for (const chunk of splitTelegramText(report)) {
+    await sendTelegramMessage(chunk);
+  }
 }
 
 module.exports = {
