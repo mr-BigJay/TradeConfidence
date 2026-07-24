@@ -1,0 +1,26 @@
+[Unit]
+Description=CoinEx AI Research Automation Bot
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/coinex-ai-bot
+Environment=NODE_ENV=production
+Environment=PLAYWRIGHT_BROWSERS_PATH=/opt/coinex-ai-bot/ms-playwright
+ExecStart=/usr/bin/node main.js
+Restart=always
+RestartSec=10
+KillSignal=SIGTERM
+TimeoutStopSec=30
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=coinex-ai-bot
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+ReadWritePaths=/opt/coinex-ai-bot/logs /opt/coinex-ai-bot/output /opt/coinex-ai-bot/data /opt/coinex-ai-bot/ms-playwright
+
+[Install]
+WantedBy=multi-user.target

@@ -68,6 +68,46 @@ DATABASE_PATH=./data/coinex-ai-bot.sqlite
 LOG_LEVEL=info
 ```
 
+## Ubuntu 24 VPS setup (Germany / EU recommended)
+
+CoinEx may block some cloud IP regions. Use a VPS where the Futures page
+loads normally (for example Germany).
+
+```bash
+git clone https://github.com/mr-BigJay/TradeConfidence.git
+cd TradeConfidence
+git checkout cursor/coinex-ai-research-bot-879f
+chmod +x scripts/*.sh
+./scripts/setup-ubuntu.sh
+nano .env
+```
+
+Validate CoinEx access first:
+
+```bash
+npm run scrape:btc
+```
+
+If scrape works, run the full pipeline once:
+
+```bash
+npm run run:once
+```
+
+Install as a systemd service:
+
+```bash
+sudo ./scripts/install-systemd.sh
+```
+
+Service commands:
+
+```bash
+sudo systemctl status coinex-ai-bot
+sudo journalctl -u coinex-ai-bot -f
+sudo systemctl restart coinex-ai-bot
+```
+
 ## Run once
 
 Scrape only:
