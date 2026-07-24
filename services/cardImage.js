@@ -56,7 +56,8 @@ async function renderAnalysisCard(analysis) {
   try {
     browser = await launchBrowser();
     const page = await browser.newPage({
-      viewport: { width: 1600, height: 1280 },
+      // Portrait 9:16 for full-screen phone display in Telegram
+      viewport: { width: 1080, height: 1920 },
       deviceScaleFactor: scale,
     });
 
