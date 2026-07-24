@@ -176,6 +176,45 @@ function asConfirmBlock(value, fallbackZone = "نامشخص") {
   };
 }
 
+const BRAND_REPLACEMENTS = [
+  [/coinglass/gi, "داده‌های مشتقه"],
+  [/bitunix/gi, "داده‌های مشتقه"],
+  [/coinex/gi, "تحلیل پژوهشی"],
+  [/بیت\s*یونیکس/g, "داده‌های مشتقه"],
+  [/بیتونیکس/g, "داده‌های مشتقه"],
+  [/کوین\s*گلس/g, "داده‌های مشتقه"],
+  [/کوینکس/g, "تحلیل پژوهشی"],
+];
+
+function stripBrandNames(value) {
+  if (typeof value !== "string" || !value) {
+    return value;
+  }
+
+  let text = value;
+  for (const [pattern, replacement] of BRAND_REPLACEMENTS) {
+    text = text.replace(pattern, replacement);
+  }
+  return text.replace(/\s{2,}/g, " ").trim();
+}
+
+function sanitizeValue(value) {
+  if (typeof value === "string") {
+    return stripBrandNames(value);
+  }
+  if (Array.isArray(value)) {
+    return value.map((item) => sanitizeValue(item));
+  }
+  if (value && typeof value === "object") {
+    const out = {};
+    for (const [key, nested] of Object.entries(value)) {
+      out[key] = sanitizeValue(nested);
+    }
+    return out;
+  }
+  return value;
+}
+
 function pickDistinctSummary(analysis) {
   const summary = String(analysis.summary || "").trim();
   const market = String(analysis.market_summary || "").trim();
@@ -205,71 +244,72 @@ function pickDistinctSummary(analysis) {
 }
 
 function normalizeAnalysis(symbol, analysis) {
+  const clean = sanitizeValue(analysis || {});
   const pairLabel =
-    analysis.pair_label ||
+    clean.pair_label ||
     (symbol.endsWith("USDT") ? `${symbol.slice(0, -4)} / USDT` : symbol);
 
-  const technicalLong = analysis.technical_long_term || {};
-  const technicalShort = analysis.technical_short_term || {};
-  const texts = pickDistinctSummary(analysis);
+  const technicalLong = clean.technical_long_term || {};
+  const technicalShort = clean.technical_short_term || {};
+  const texts = pickDistinctSummary(clean);
 
   return {
-    title: analysis.title || "تحلیل اختصاصی BTC",
+    title: clean.title || "تحلیل اختصاصی BTC",
     symbol,
     pair_label: pairLabel,
-    trend: analysis.trend || analysis.bias || "Neutral",
-    bias: analysis.bias || "خنثی",
-    confidence: Number.parseInt(analysis.confidence, 10) || 0,
-    current_price: analysis.current_price || "",
+    trend: clean.trend || clean.bias || "Neutral",
+    bias: clean.bias || "خنثی",
+    confidence: Number.parseInt(clean.confidence, 10) || 0,
+    current_price: clean.current_price || "",
     market_summary: texts.market_summary,
-    market_battle_points: uniqueStrings(analysis.market_battle_points, 3),
-    regime: analysis.regime || "Consolidation",
-    derivatives_checklist: asChecklist(analysis.derivatives_checklist),
-    long_score: asScore(analysis.long_score),
-    short_score: asScore(analysis.short_score),
-    long_confirm: asConfirmBlock(analysis.long_confirm, "منطقه تأیید لانگ مشخص نشده"),
-    short_confirm: asConfirmBlock(analysis.short_confirm, "منطقه تأیید شورت مشخص نشده"),
-    confirmation_watch: uniqueStrings(analysis.confirmation_watch, 4),
-    fundamentals: asFundamentals(analysis.fundamentals),
+    market_battle_points: uniqueStrings(clean.market_battle_points, 3),
+    regime: clean.regime || "Consolidation",
+    derivatives_checklist: asChecklist(clean.derivatives_checklist),
+    long_score: asScore(clean.long_score),
+    short_score: asScore(clean.short_score),
+    long_confirm: asConfirmBlock(clean.long_confirm, "منطقه تأیید لانگ مشخص نشده"),
+    short_confirm: asConfirmBlock(clean.short_confirm, "منطقه تأیید شورت مشخص نشده"),
+    confirmation_watch: uniqueStrings(clean.confirmation_watch, 4),
+    fundamentals: asFundamentals(clean.fundamentals),
     technical_long_term: {
-      bias: technicalLong.bias || analysis.long_term_trend || "نامشخص",
+      bias: technicalLong.bias || clean.long_term_trend || "نامشخص",
       positives: uniqueStrings(technicalLong.positives, 5),
       warnings: uniqueStrings(technicalLong.warnings, 5),
       text: technicalLong.text || "",
     },
     technical_short_term: {
-      bias: technicalShort.bias || analysis.short_term_trend || "نامشخص",
+      bias: technicalShort.bias || clean.short_term_trend || "نامشخص",
       points: uniqueStrings(technicalShort.points, 6),
       text: technicalShort.text || "",
     },
-    bullish_probability: Number.parseInt(analysis.bullish_probability, 10) || 50,
-    bearish_probability: Number.parseInt(analysis.bearish_probability, 10) || 50,
-    breakout_probability_24_48h: Number.parseInt(analysis.breakout_probability_24_48h, 10) || 0,
-    correction_probability: Number.parseInt(analysis.correction_probability, 10) || 0,
-    invalidation_level: analysis.invalidation_level || "",
-    short_term_trend: analysis.short_term_trend || "نامشخص",
-    long_term_trend: analysis.long_term_trend || "نامشخص",
-    structure: analysis.structure || "نامشخص",
-    volume_status: analysis.volume_status || "نامشخص",
-    momentum_status: analysis.momentum_status || "نامشخص",
-    current_range: analysis.current_range || "نامشخص",
-    key_resistance: uniqueStrings(analysis.key_resistance, 3),
-    key_support: uniqueStrings(analysis.key_support, 3),
-    insights: asInsights(analysis.insights),
-    bullish_scenario: analysis.bullish_scenario || "",
-    bullish_scenario_probability: Number.parseInt(analysis.bullish_scenario_probability, 10) || 0,
-    bullish_targets: uniqueStrings(analysis.bullish_targets, 3),
-    neutral_scenario: analysis.neutral_scenario || "",
-    neutral_scenario_probability: Number.parseInt(analysis.neutral_scenario_probability, 10) || 0,
-    bearish_scenario: analysis.bearish_scenario || "",
-    bearish_scenario_probability: Number.parseInt(analysis.bearish_scenario_probability, 10) || 0,
-    bearish_targets: uniqueStrings(analysis.bearish_targets, 3),
-    indicators: asIndicators(analysis.indicators),
-    short_term_strategy: analysis.short_term_strategy || "",
-    long_term_strategy: analysis.long_term_strategy || "",
+    bullish_probability: Number.parseInt(clean.bullish_probability, 10) || 50,
+    bearish_probability: Number.parseInt(clean.bearish_probability, 10) || 50,
+    breakout_probability_24_48h: Number.parseInt(clean.breakout_probability_24_48h, 10) || 0,
+    correction_probability: Number.parseInt(clean.correction_probability, 10) || 0,
+    invalidation_level: clean.invalidation_level || "",
+    short_term_trend: clean.short_term_trend || "نامشخص",
+    long_term_trend: clean.long_term_trend || "نامشخص",
+    structure: clean.structure || "نامشخص",
+    volume_status: clean.volume_status || "نامشخص",
+    momentum_status: clean.momentum_status || "نامشخص",
+    current_range: clean.current_range || "نامشخص",
+    key_resistance: uniqueStrings(clean.key_resistance, 3),
+    key_support: uniqueStrings(clean.key_support, 3),
+    insights: asInsights(clean.insights),
+    bullish_scenario: clean.bullish_scenario || "",
+    bullish_scenario_probability: Number.parseInt(clean.bullish_scenario_probability, 10) || 0,
+    bullish_targets: uniqueStrings(clean.bullish_targets, 3),
+    neutral_scenario: clean.neutral_scenario || "",
+    neutral_scenario_probability: Number.parseInt(clean.neutral_scenario_probability, 10) || 0,
+    bearish_scenario: clean.bearish_scenario || "",
+    bearish_scenario_probability: Number.parseInt(clean.bearish_scenario_probability, 10) || 0,
+    bearish_targets: uniqueStrings(clean.bearish_targets, 3),
+    indicators: asIndicators(clean.indicators),
+    short_term_strategy: clean.short_term_strategy || "",
+    long_term_strategy: clean.long_term_strategy || "",
     final_verdict: texts.final_verdict,
-    risk_level: analysis.risk_level || "Medium",
-    risk_notes: analysis.risk_notes || "",
+    risk_level: clean.risk_level || "Medium",
+    risk_notes: clean.risk_notes || "",
     trading_action: "NO_SIGNAL",
     summary: texts.summary,
   };

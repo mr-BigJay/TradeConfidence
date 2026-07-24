@@ -127,7 +127,7 @@ function formatFundingPercent(rawRate) {
 function buildChecklistText(snapshot) {
   const lines = [
     `Symbol: ${snapshot.symbol}`,
-    `Timeframe: ${snapshot.interval} (Bitunix Data / CoinGlass-sourced)`,
+    `Timeframe: ${snapshot.interval} (derivatives positioning checklist)`,
     `Last price: ${snapshot.lastPrice ?? "n/a"}`,
     `24h change: ${snapshot.change24hPercent ?? "n/a"}%`,
     `Mark: ${snapshot.markPrice ?? "n/a"} | Index: ${snapshot.indexPrice ?? "n/a"}`,

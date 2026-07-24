@@ -49,7 +49,8 @@ function clip(text, max) {
 
 /**
  * One compact Telegram message:
- * CoinEx roadmap first, Bitunix confirmation second, then long/short confirms.
+ * research roadmap first, derivatives confirmation second, then long/short confirms.
+ * Never mention exchange brand names in user-facing text.
  */
 function formatDeepAnalysisMessage(analysis) {
   const checklist = uniqueChecklist(analysis.derivatives_checklist)
@@ -80,12 +81,12 @@ function formatDeepAnalysisMessage(analysis) {
     `${analysis.pair_label || analysis.symbol} — وضعیت بازار`,
     `بایاس: ${analysis.bias || "خنثی"} | اطمینان: ${analysis.confidence || 0}% | قیمت: ${analysis.current_price || "-"}`,
     "",
-    "نقشه راه CoinEx",
+    "نقشه راه پژوهشی",
     roadmap,
     battlePoints ? `\nنکات کلیدی:\n${battlePoints}` : "",
     "",
-    "تأیید Bitunix (1H)",
-    checklist || "داده Bitunix موجود نبود",
+    "تأیید مشتقه (1H)",
+    checklist || "داده مشتقه موجود نبود",
     scoreLine || "",
     "",
     "سطوح",

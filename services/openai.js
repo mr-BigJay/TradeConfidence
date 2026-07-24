@@ -80,7 +80,7 @@ async function analyzeAiResearch({ symbol, text, bitunixData = null }) {
       {
         role: "system",
         content:
-          "You produce strict JSON for Persian crypto market status. CoinEx AI Research is the main roadmap; Bitunix 1h data only confirms or challenges it. Write clean formal Persian with no typos. Keep text compact for one Telegram message. Never give direct buy/sell orders. Always include long_confirm and short_confirm.",
+          "You produce strict JSON for Persian crypto market status. AI Research text is the main roadmap; 1h derivatives checklist only confirms or challenges it. Write clean formal Persian with no typos. Never mention CoinEx, Bitunix, Coinglass, کوینکس, or بیتونیکس in any output field. Keep text compact for one Telegram message. Never give direct buy/sell orders. Always include long_confirm and short_confirm.",
       },
       {
         role: "user",
