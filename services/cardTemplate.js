@@ -1,3 +1,5 @@
+const { parseLevel, formatPrice } = require("./numberFormat");
+
 function escapeHtml(value) {
   return String(value ?? "")
     .replace(/&/g, "&amp;")
@@ -34,17 +36,6 @@ function formatNow() {
     timeZone: "UTC",
   });
   return { date, time: `${time} UTC` };
-}
-
-function parseLevel(value) {
-  const numeric = Number(String(value).replace(/,/g, "").replace(/[^\d.-]/g, ""));
-  return Number.isFinite(numeric) ? numeric : null;
-}
-
-function formatPrice(value) {
-  const numeric = parseLevel(value);
-  if (numeric === null) return String(value ?? "");
-  return numeric.toLocaleString("en-US");
 }
 
 function buildCandleSvg(candles = [], analysis = {}) {

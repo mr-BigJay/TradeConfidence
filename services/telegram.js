@@ -1,6 +1,7 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const config = require("../config/config");
+const { clipText } = require("./numberFormat");
 
 const TELEGRAM_MESSAGE_LIMIT = 3900;
 
@@ -25,22 +26,7 @@ function joinLines(items, bullet = "•") {
 }
 
 function clip(text, max) {
-  const value = String(text || "").trim();
-  if (!value) return "";
-  if (value.length <= max) return value;
-
-  const slice = value.slice(0, max);
-  const breakAt = Math.max(
-    slice.lastIndexOf("۔"),
-    slice.lastIndexOf("."),
-    slice.lastIndexOf("؟"),
-    slice.lastIndexOf("!"),
-    slice.lastIndexOf("،"),
-    slice.lastIndexOf(" "),
-  );
-
-  const cut = breakAt > max * 0.55 ? breakAt + 1 : max;
-  return `${slice.slice(0, cut).trim()}…`;
+  return clipText(text, max);
 }
 
 function splitTelegramText(text, maxLength = TELEGRAM_MESSAGE_LIMIT) {

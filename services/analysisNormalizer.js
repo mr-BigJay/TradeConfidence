@@ -1,3 +1,9 @@
+const {
+  toAsciiDigits,
+  normalizeLevelText,
+  parsePercent,
+} = require("./numberFormat");
+
 function asArray(value) {
   if (Array.isArray(value)) {
     return value.filter((item) => item !== undefined && item !== null && item !== "").map(String);
@@ -14,16 +20,19 @@ function asTone(value, fallback = "neutral") {
   return ["bullish", "bearish", "neutral"].includes(value) ? value : fallback;
 }
 
-function uniqueStrings(values, limit = 3) {
+function uniqueStrings(values, limit = 3, { asLevels = false } = {}) {
   const seen = new Set();
   const out = [];
   for (const value of asArray(values)) {
-    const key = String(value).trim().replace(/,/g, "");
+    const normalized = asLevels
+      ? normalizeLevelText(value)
+      : toAsciiDigits(String(value).trim()).replace(/\s+/g, " ").trim();
+    const key = normalized.replace(/,/g, "");
     if (!key || seen.has(key)) {
       continue;
     }
     seen.add(key);
-    out.push(String(value).trim());
+    out.push(normalized);
     if (out.length >= limit) {
       break;
     }
@@ -170,9 +179,9 @@ function asScore(value) {
 function asConfirmBlock(value, fallbackZone = "نامشخص") {
   const block = value && typeof value === "object" ? value : {};
   return {
-    zone: String(block.zone || fallbackZone).trim() || fallbackZone,
+    zone: toAsciiDigits(String(block.zone || fallbackZone).trim()) || fallbackZone,
     how: uniqueStrings(block.how || block.conditions || [], 3),
-    invalidation: String(block.invalidation || "").trim(),
+    invalidation: toAsciiDigits(String(block.invalidation || "").trim()),
   };
 }
 
@@ -203,18 +212,21 @@ function stripBrandNames(value) {
     return value;
   }
 
-  let text = value;
+  let text = toAsciiDigits(value);
   for (const [pattern, replacement] of BRAND_REPLACEMENTS) {
     text = text.replace(pattern, replacement);
   }
   return text
     .replace(/\(\s*\)/g, "")
     .replace(/\s+و\s*(?=[.!?؟]|$)/g, "")
-    .replace(/\s+([,.،؛:!?؟])/g, "$1")
+    // Keep thousand separators inside numbers: only trim spaces before punctuation
+    // when the punctuation is NOT a comma between digits.
+    .replace(/(\D)\s+([.،؛:!?؟])/g, "$1$2")
+    .replace(/^\s+([.،؛:!?؟])/g, "$1")
     .replace(/([.!?؟]){2,}/g, "$1")
     .replace(/\s{2,}/g, " ")
     .replace(/\n{3,}/g, "\n\n")
-    .replace(/^[.،؛:\-\s]+|[.،؛:\-\s]+$/g, "")
+    .replace(/^[.،؛:\s]+|[.،؛:\s]+$/g, "")
     .trim();
 }
 
@@ -279,8 +291,8 @@ function normalizeAnalysis(symbol, analysis) {
     pair_label: pairLabel,
     trend: clean.trend || clean.bias || "Neutral",
     bias: clean.bias || "خنثی",
-    confidence: Number.parseInt(clean.confidence, 10) || 0,
-    current_price: clean.current_price || "",
+    confidence: parsePercent(clean.confidence, 0),
+    current_price: normalizeLevelText(clean.current_price || "") || toAsciiDigits(clean.current_price || ""),
     market_summary: texts.market_summary,
     market_battle_points: uniqueStrings(clean.market_battle_points, 3),
     regime: clean.regime || "Consolidation",
@@ -304,28 +316,28 @@ function normalizeAnalysis(symbol, analysis) {
       points: uniqueStrings(technicalShort.points, 6),
       text: technicalShort.text || "",
     },
-    bullish_probability: Number.parseInt(clean.bullish_probability, 10) || 50,
-    bearish_probability: Number.parseInt(clean.bearish_probability, 10) || 50,
-    breakout_probability_24_48h: Number.parseInt(clean.breakout_probability_24_48h, 10) || 0,
-    correction_probability: Number.parseInt(clean.correction_probability, 10) || 0,
-    invalidation_level: clean.invalidation_level || "",
+    bullish_probability: parsePercent(clean.bullish_probability, 50),
+    bearish_probability: parsePercent(clean.bearish_probability, 50),
+    breakout_probability_24_48h: parsePercent(clean.breakout_probability_24_48h, 0),
+    correction_probability: parsePercent(clean.correction_probability, 0),
+    invalidation_level: normalizeLevelText(clean.invalidation_level || ""),
     short_term_trend: clean.short_term_trend || "نامشخص",
     long_term_trend: clean.long_term_trend || "نامشخص",
     structure: clean.structure || "نامشخص",
     volume_status: clean.volume_status || "نامشخص",
     momentum_status: clean.momentum_status || "نامشخص",
-    current_range: clean.current_range || "نامشخص",
-    key_resistance: uniqueStrings(clean.key_resistance, 3),
-    key_support: uniqueStrings(clean.key_support, 3),
+    current_range: normalizeLevelText(clean.current_range || "") || "نامشخص",
+    key_resistance: uniqueStrings(clean.key_resistance, 3, { asLevels: true }),
+    key_support: uniqueStrings(clean.key_support, 3, { asLevels: true }),
     insights: asInsights(clean.insights),
     bullish_scenario: clean.bullish_scenario || "",
-    bullish_scenario_probability: Number.parseInt(clean.bullish_scenario_probability, 10) || 0,
-    bullish_targets: uniqueStrings(clean.bullish_targets, 3),
+    bullish_scenario_probability: parsePercent(clean.bullish_scenario_probability, 0),
+    bullish_targets: uniqueStrings(clean.bullish_targets, 3, { asLevels: true }),
     neutral_scenario: clean.neutral_scenario || "",
-    neutral_scenario_probability: Number.parseInt(clean.neutral_scenario_probability, 10) || 0,
+    neutral_scenario_probability: parsePercent(clean.neutral_scenario_probability, 0),
     bearish_scenario: clean.bearish_scenario || "",
-    bearish_scenario_probability: Number.parseInt(clean.bearish_scenario_probability, 10) || 0,
-    bearish_targets: uniqueStrings(clean.bearish_targets, 3),
+    bearish_scenario_probability: parsePercent(clean.bearish_scenario_probability, 0),
+    bearish_targets: uniqueStrings(clean.bearish_targets, 3, { asLevels: true }),
     indicators: asIndicators(clean.indicators),
     short_term_strategy: clean.short_term_strategy || "",
     long_term_strategy: clean.long_term_strategy || "",
