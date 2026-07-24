@@ -15,25 +15,25 @@ Then produce a deeper independent analysis by weighting:
 - fundamentals / technical structure / momentum / volume / risk / scenarios
 
 Style requirements:
-- Write like a senior desk analyst, but KEEP IT SHORT.
-- Be concrete and decision-useful; avoid long essays.
+- Write like a senior desk analyst.
+- Be concrete and decision-useful.
+- Medium length is OK: explain WHY, not only WHAT.
 - Start from the Bitunix 1h checklist, then reconcile with CoinEx AI Research.
-- Explain conflicting signals in at most 3 short bullets.
-- Do NOT give buy/sell orders or entries as trading signals.
+- Explain conflicting signals clearly (2-4 short bullets).
+- Do NOT give direct buy/sell orders like "الان لانگ بزن" or exact market entries.
+- Instead, give confirmation conditions for LONG and SHORT scenarios: WHERE (price zone) and HOW (what must confirm).
 - trading_action must always be "NO_SIGNAL".
 - All narrative fields must be in Persian.
 - Return only valid JSON. No markdown.
 
-Length limits (strict):
-- market_summary: max 2 short sentences
-- summary: max 1 sentence
-- final_verdict: max 2 short sentences
-- each scenario text: max 1 sentence
-- checklist notes: max 8 words
-- fundamentals: max 3 items, each text max 1 sentence
-- technical_long_term.text / technical_short_term.text: max 1 sentence each
-- confirmation_watch: max 3 short items
-- market_battle_points: max 3 short items
+Length guidance:
+- market_summary: 3-5 sentences
+- summary: 2 sentences
+- final_verdict: 3-4 sentences
+- each scenario text: 2 sentences
+- checklist notes: up to 12 words
+- confirmation conditions: 3-5 concrete items each side
+- market_battle_points: 3-4 short items
 
 Checklist scoring guidance (for derivatives_checklist):
 - Funding clearly positive/high => result like "فشار شورت" and tone="bearish"
@@ -44,6 +44,12 @@ Checklist scoring guidance (for derivatives_checklist):
 - tone MUST match result meaning (لانگ/ورود=bullish, شورت/خروج=bearish)
 - long_score and short_score are from 0 to 10 and can be fractional
 
+Confirmation guidance (long_confirm / short_confirm):
+- zone: specific price area / level where scenario can be considered (e.g. "بازپس‌گیری 64800 و تثبیت بالای آن در 1H")
+- how: concrete confirmations such as funding cool-off, OI behavior, break & retest, rejection wick, RSI behavior, liquidity sweep
+- invalidation: level/condition that cancels that scenario
+- Prefer actionable market structure language, not order instructions.
+
 JSON schema:
 {
   "title": "تحلیل اختصاصی BTC",
@@ -52,55 +58,75 @@ JSON schema:
   "bias": "صعودی | نزولی | خنثی | نوسانی",
   "confidence": 72,
   "current_price": "65980",
-  "market_summary": "long Persian paragraph",
+  "market_summary": "Persian paragraph 3-5 sentences",
   "market_battle_points": ["Persian point 1", "Persian point 2"],
   "regime": "Consolidation | Trend | Breakout Watch | Corrective",
   "derivatives_checklist": [
     {
       "name": "Funding Rate",
       "value": "+0.01%",
-      "result": "لانگ | شورت | خنثی",
-      "tone": "bullish | bearish | neutral",
+      "result": "فشار شورت",
+      "tone": "bearish",
       "note": "short Persian note"
     },
     {
       "name": "Open Interest 1h",
-      "value": "↑ / ↓ / ↔",
-      "result": "ورود سرمایه | خروج سرمایه | خنثی",
-      "tone": "bullish | bearish | neutral",
+      "value": "↑",
+      "result": "ورود سرمایه",
+      "tone": "bullish",
       "note": "short Persian note"
     },
     {
       "name": "Long/Short Accounts",
       "value": "1.25",
-      "result": "لانگ غالب | شورت غالب | متعادل",
-      "tone": "bullish | bearish | neutral",
+      "result": "لانگ غالب",
+      "tone": "bullish",
       "note": "short Persian note"
     },
     {
       "name": "Top Trader Accounts",
       "value": "1.20",
-      "result": "...",
-      "tone": "bullish | bearish | neutral",
+      "result": "نهنگ‌ها لانگ",
+      "tone": "bullish",
       "note": "short Persian note"
     },
     {
       "name": "Top Trader Positions",
       "value": "1.10",
-      "result": "...",
-      "tone": "bullish | bearish | neutral",
+      "result": "حجم لانگ",
+      "tone": "bullish",
       "note": "short Persian note"
     },
     {
       "name": "Liquidation Map",
-      "value": "liquidity above/below",
+      "value": "liquidity below/above",
       "result": "...",
-      "tone": "bullish | bearish | neutral",
+      "tone": "neutral",
       "note": "short Persian note"
     }
   ],
   "long_score": 6.5,
   "short_score": 5.5,
+  "long_confirm": {
+    "zone": "کجا: مثلاً بالای 64800 یا برگشت از 63500",
+    "how": [
+      "چطور: تثبیت کندل 1H بالای سطح",
+      "کاهش یا خنک شدن Funding",
+      "همراهی OI با حرکت قیمت",
+      "ری‌تست موفق سطح شکسته"
+    ],
+    "invalidation": "اگر زیر 63200 بسته شود این سناریو باطل است"
+  },
+  "short_confirm": {
+    "zone": "کجا: مثلاً رد شدن از 64800-65000 یا از دست رفتن 63500",
+    "how": [
+      "چطور: سایه بالایی / ریجکت در مقاومت",
+      "Funding مثبت و در حال افزایش",
+      "قیمت سقف جدید نسازد ولی OI بالا برود",
+      "شکست حمایت و برگشت ناموفق"
+    ],
+    "invalidation": "اگر بالای 65700 تثبیت شود این سناریو باطل است"
+  },
   "confirmation_watch": ["Persian condition 1", "Persian condition 2"],
   "fundamentals": [
     {
@@ -134,12 +160,12 @@ JSON schema:
       "tone": "bullish | bearish | neutral"
     }
   ],
-  "bullish_scenario": "Persian text",
+  "bullish_scenario": "Persian text 2 sentences",
   "bullish_scenario_probability": 65,
   "bullish_targets": ["66900", "67500", "68000"],
   "neutral_scenario": "Persian text",
   "neutral_scenario_probability": 0,
-  "bearish_scenario": "Persian text",
+  "bearish_scenario": "Persian text 2 sentences",
   "bearish_scenario_probability": 35,
   "bearish_targets": ["64500", "63800", "61500"],
   "indicators": [
@@ -151,8 +177,8 @@ JSON schema:
     { "name": "RSI/KDJ", "status": "اشباع خرید", "tone": "neutral" },
     { "name": "بولینگر", "status": "فشرده", "tone": "neutral" }
   ],
-  "short_term_strategy": "Persian paragraph without buy/sell signal language",
-  "long_term_strategy": "Persian paragraph without buy/sell signal language",
+  "short_term_strategy": "Persian paragraph without buy/sell order language",
+  "long_term_strategy": "Persian paragraph without buy/sell order language",
   "short_term_trend": "نوسانی متمایل به نزولی",
   "long_term_trend": "صعودی",
   "bullish_probability": 75,
@@ -160,20 +186,20 @@ JSON schema:
   "breakout_probability_24_48h": 55,
   "correction_probability": 45,
   "invalidation_level": "61500",
-  "final_verdict": "Persian paragraph",
+  "final_verdict": "Persian paragraph 3-4 sentences",
   "risk_level": "Medium",
   "risk_notes": "Persian notes",
   "trading_action": "NO_SIGNAL",
-  "summary": "short Persian summary for card footer"
+  "summary": "Persian summary 2 sentences"
 }
 
 Notes:
 - Prefer 2 main scenarios if the market is binary, or 3 if a real consolidation middle path exists.
 - If only two scenarios are meaningful, set neutral_scenario_probability to 0 and make bullish+bearish = 100.
 - bullish_probability + bearish_probability must equal 100.
-- Keep card insight texts short, but keep market_summary / technical / final_verdict deep.
 - Always fill derivatives_checklist using Bitunix 1h numbers when available.
-- long_score/short_score should reflect the conflict/balance of the checklist, not a trade order.
+- Always fill long_confirm and short_confirm with zone + how + invalidation.
+- long_score/short_score reflect checklist balance, not an order to enter now.
 
 Bitunix Data (1h timeframe checklist):
 {{BITUNIX_DATA}}

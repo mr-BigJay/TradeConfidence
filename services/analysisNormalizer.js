@@ -167,6 +167,15 @@ function asScore(value) {
   return Math.max(0, Math.min(10, Math.round(n * 10) / 10));
 }
 
+function asConfirmBlock(value, fallbackZone = "نامشخص") {
+  const block = value && typeof value === "object" ? value : {};
+  return {
+    zone: String(block.zone || fallbackZone).trim() || fallbackZone,
+    how: uniqueStrings(block.how || block.conditions || [], 5),
+    invalidation: String(block.invalidation || "").trim(),
+  };
+}
+
 function pickDistinctSummary(analysis) {
   const summary = String(analysis.summary || "").trim();
   const market = String(analysis.market_summary || "").trim();
@@ -218,7 +227,9 @@ function normalizeAnalysis(symbol, analysis) {
     derivatives_checklist: asChecklist(analysis.derivatives_checklist),
     long_score: asScore(analysis.long_score),
     short_score: asScore(analysis.short_score),
-    confirmation_watch: uniqueStrings(analysis.confirmation_watch, 3),
+    long_confirm: asConfirmBlock(analysis.long_confirm, "منطقه تأیید لانگ مشخص نشده"),
+    short_confirm: asConfirmBlock(analysis.short_confirm, "منطقه تأیید شورت مشخص نشده"),
+    confirmation_watch: uniqueStrings(analysis.confirmation_watch, 4),
     fundamentals: asFundamentals(analysis.fundamentals),
     technical_long_term: {
       bias: technicalLong.bias || analysis.long_term_trend || "نامشخص",

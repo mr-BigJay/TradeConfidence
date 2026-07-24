@@ -225,6 +225,7 @@ function buildAnalysisCardHtml(analysis, candles = []) {
     .card {
       width: 1080px;
       min-height: 1920px;
+      height: auto;
       padding: 36px 34px 28px;
       background:
         radial-gradient(circle at 20% 0%, rgba(56,189,248,.14), transparent 30%),

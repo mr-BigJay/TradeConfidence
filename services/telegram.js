@@ -48,18 +48,21 @@ function formatDeepAnalysisMessage(analysis) {
     .map((item) => `${toneEmoji(item.tone)} ${item.name}: ${item.value} → ${item.result}`)
     .join("\n");
 
-  const battlePoints = joinLines((analysis.market_battle_points || []).slice(0, 3), "•");
-  const confirmationWatch = joinLines((analysis.confirmation_watch || []).slice(0, 3), "•");
+  const battlePoints = joinLines((analysis.market_battle_points || []).slice(0, 4), "•");
   const supports = (analysis.key_support || []).slice(0, 3).join(" | ") || "نامشخص";
   const resistances = (analysis.key_resistance || []).slice(0, 3).join(" | ") || "نامشخص";
 
   const summary =
-    analysis.summary ||
     analysis.market_summary ||
+    analysis.summary ||
     analysis.final_verdict ||
     "نامشخص";
 
   const verdict = analysis.final_verdict || analysis.summary || "نامشخص";
+  const longConfirm = analysis.long_confirm || {};
+  const shortConfirm = analysis.short_confirm || {};
+  const longHow = joinLines(longConfirm.how || [], "•");
+  const shortHow = joinLines(shortConfirm.how || [], "•");
 
   const scoreLine =
     analysis.long_score !== null && analysis.long_score !== undefined
@@ -74,7 +77,7 @@ function formatDeepAnalysisMessage(analysis) {
     checklist || "داده Bitunix موجود نبود",
     scoreLine ? `\n${scoreLine}` : "",
     "",
-    "خلاصه",
+    "توضیح وضعیت",
     summary,
     battlePoints ? `\nتضاد/نبرد اصلی:\n${battlePoints}` : "",
     "",
@@ -90,11 +93,20 @@ function formatDeepAnalysisMessage(analysis) {
       : "",
     `🔴 نزولی ${analysis.bearish_scenario_probability || 0}% — ${analysis.bearish_scenario || "نامشخص"}`,
     "",
+    "تأییدیه سناریوی لانگ",
+    `کجا: ${longConfirm.zone || "نامشخص"}`,
+    longHow ? `چطور:\n${longHow}` : "",
+    longConfirm.invalidation ? `باطل‌کننده: ${longConfirm.invalidation}` : "",
+    "",
+    "تأییدیه سناریوی شورت",
+    `کجا: ${shortConfirm.zone || "نامشخص"}`,
+    shortHow ? `چطور:\n${shortHow}` : "",
+    shortConfirm.invalidation ? `باطل‌کننده: ${shortConfirm.invalidation}` : "",
+    "",
     "جمع‌بندی",
     verdict,
-    confirmationWatch ? `\nبرای تغییر وضعیت، منتظر:\n${confirmationWatch}` : "",
     "",
-    "⚠️ سیگنال خرید/فروش نیست؛ فقط وضعیت بازار.",
+    "⚠️ دستور ورود نیست؛ فقط شرایط تأیید سناریو برای مدیریت ریسک.",
   ]
     .filter((line) => line !== "")
     .join("\n");

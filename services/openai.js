@@ -79,7 +79,7 @@ async function analyzeAiResearch({ symbol, text, bitunixData = null }) {
       {
         role: "system",
         content:
-          "You produce strict JSON for Persian crypto market status dashboard cards. You never provide financial advice or direct buy/sell signals. Prefer Bitunix 1h derivatives checklist when present.",
+          "You produce strict JSON for Persian crypto market status cards. Never give direct buy/sell orders. Always include long_confirm and short_confirm with WHERE zone, HOW conditions, and invalidation. Prefer Bitunix 1h checklist when present.",
       },
       {
         role: "user",
