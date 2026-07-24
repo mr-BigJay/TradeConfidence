@@ -206,12 +206,12 @@ function stripBrandNames(value) {
   }
   return text
     .replace(/\(\s*\)/g, "")
-    .replace(/\s+([,.،؛:!?])/g, "$1")
-    .replace(/([.!?؟])\s*و\s*[.!?؟]/g, "$1")
-    .replace(/\bو\s*[.!?؟]/g, ".")
+    .replace(/\s+و\s*(?=[.!?؟]|$)/g, "")
+    .replace(/\s+([,.،؛:!?؟])/g, "$1")
+    .replace(/([.!?؟]){2,}/g, "$1")
     .replace(/\s{2,}/g, " ")
     .replace(/\n{3,}/g, "\n\n")
-    .replace(/^[.،؛:\-\s]+/, "")
+    .replace(/^[.،؛:\-\s]+|[.،؛:\-\s]+$/g, "")
     .trim();
 }
 
