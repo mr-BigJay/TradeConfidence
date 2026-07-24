@@ -62,6 +62,7 @@ module.exports = {
     databasePath: process.env.DATABASE_PATH || "./data/coinex-ai-bot.sqlite",
     logLevel: process.env.LOG_LEVEL || "info",
     cardScale: parsePositiveInteger(process.env.CARD_SCALE, 2),
-    cardMode: ["api", "html", "auto"].includes(cardMode) ? cardMode : "api",
+    // Default and invalid values always use server-side HTML rendering.
+    cardMode: ["api", "html", "auto"].includes(cardMode) ? cardMode : "html",
   },
 };

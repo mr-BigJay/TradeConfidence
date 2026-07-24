@@ -148,31 +148,19 @@ npm run run:force
 
 ## Card image mode
 
-Set in `.env`:
+Cards are generated **on the server** (HTML → PNG via Playwright). This is the
+default and recommended production mode:
 
 ```env
 CARD_MODE=html
 ```
 
-Modes:
-- `html` : render locally with Playwright on the server (default, exact numbers/layout)
-- `api` : generate the dashboard image with an Arvan/OpenAI image model
+Optional modes (not used in production by default):
+- `api` : Arvan/OpenAI image model
 - `auto` : try API first, fall back to HTML
 
-For `CARD_MODE=api`, create a separate **image model** endpoint in Arvan and set:
-
-```env
-IMAGE_BASE_URL=https://arvancloudai.ir/gateway/models/YOUR_IMAGE_MODEL/.../v1
-IMAGE_MODEL=YOUR_IMAGE_MODEL_NAME
-IMAGE_API_KEY=your_machine_user_key
-IMAGE_AUTH_SCHEME=apikey
-IMAGE_SIZE=1792x1024
-```
-
-Note: GPT text models cannot generate images. You need an image-capable model endpoint.
-
-Each successful analysis also renders a Persian dashboard card image and sends it
-to Telegram via `sendPhoto`, with a short text caption. If image rendering fails,
+Each successful analysis renders a Persian dashboard card and sends it to
+Telegram via `sendPhoto`, with the deep analysis text. If image rendering fails,
 the bot falls back to text-only Telegram delivery.
 
 ## Output
