@@ -31,6 +31,10 @@ function listOrDash(items, mapper = (item) => item) {
   return items.map(mapper).join(" | ");
 }
 
+function isGeminiImageModel(modelName = "") {
+  return /gemini/i.test(modelName) && /image/i.test(modelName);
+}
+
 async function buildImagePrompt(analysis) {
   const template = await fs.readFile(path.join("prompts", "card-image.txt"), "utf8");
 
@@ -79,6 +83,183 @@ async function downloadToFile(url, filePath) {
   await fs.writeFile(filePath, buffer);
 }
 
+function extractImagePayload(payload) {
+  const direct = payload?.data?.[0];
+  if (direct?.b64_json || direct?.url) {
+    return direct;
+  }
+
+  const message = payload?.choices?.[0]?.message;
+  if (message?.images?.[0]) {
+    const image = message.images[0];
+    return {
+      b64_json: image.b64_json || image.data || null,
+      url: image.url || null,
+    };
+  }
+
+  if (Array.isArray(message?.content)) {
+    for (const part of message.content) {
+      if (part?.type === "image_url" && part?.image_url?.url) {
+        const url = part.image_url.url;
+        if (url.startsWith("data:image")) {
+          return { b64_json: url.split(",")[1], url: null };
+        }
+        return { b64_json: null, url };
+      }
+      if (part?.inline_data?.data || part?.inlineData?.data) {
+        return {
+          b64_json: part.inline_data?.data || part.inlineData?.data,
+          url: null,
+        };
+      }
+    }
+  }
+
+  const parts =
+    payload?.candidates?.[0]?.content?.parts ||
+    payload?.candidates?.[0]?.content?.[0]?.parts ||
+    [];
+
+  for (const part of parts) {
+    if (part?.inlineData?.data || part?.inline_data?.data) {
+      return {
+        b64_json: part.inlineData?.data || part.inline_data?.data,
+        url: null,
+      };
+    }
+    if (part?.fileData?.fileUri || part?.file_data?.file_uri) {
+      return {
+        b64_json: null,
+        url: part.fileData?.fileUri || part.file_data?.file_uri,
+      };
+    }
+  }
+
+  return null;
+}
+
+async function postJson(endpoint, apiKey, body) {
+  const response = await fetch(endpoint, {
+    method: "POST",
+    headers: {
+      Authorization: authHeader(apiKey, config.image.authScheme),
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
+  });
+
+  const payload = await response.json().catch(() => ({}));
+  return { response, payload };
+}
+
+async function tryOpenAiImages({ baseURL, apiKey, model, prompt }) {
+  const endpoint = `${baseURL}/images/generations`;
+  logger.info("Trying OpenAI-style image generations", { endpoint, model });
+
+  const { response, payload } = await postJson(endpoint, apiKey, {
+    model,
+    prompt,
+    n: 1,
+    size: config.image.size,
+    response_format: "b64_json",
+    quality: config.image.quality,
+  });
+
+  if (!response.ok) {
+    throw new Error(
+      `OpenAI images error: ${payload.error?.message || payload.message || response.statusText}`,
+    );
+  }
+
+  const image = extractImagePayload(payload);
+  if (!image) {
+    throw new Error("OpenAI images response had no image data");
+  }
+
+  return image;
+}
+
+async function tryGeminiChatCompletions({ baseURL, apiKey, model, prompt }) {
+  const endpoint = `${baseURL}/chat/completions`;
+  logger.info("Trying Gemini image via chat.completions", { endpoint, model });
+
+  const bodies = [
+    {
+      model,
+      messages: [{ role: "user", content: prompt }],
+      modalities: ["text", "image"],
+    },
+    {
+      model,
+      messages: [{ role: "user", content: prompt }],
+      response_modalities: ["TEXT", "IMAGE"],
+      generationConfig: {
+        responseModalities: ["TEXT", "IMAGE"],
+        imageConfig: {
+          aspectRatio: "16:9",
+          imageSize: "2K",
+        },
+      },
+    },
+  ];
+
+  let lastError = null;
+
+  for (const body of bodies) {
+    const { response, payload } = await postJson(endpoint, apiKey, body);
+    if (!response.ok) {
+      lastError = new Error(
+        `Gemini chat image error: ${payload.error?.message || payload.message || response.statusText}`,
+      );
+      continue;
+    }
+
+    const image = extractImagePayload(payload);
+    if (image) {
+      return image;
+    }
+
+    lastError = new Error("Gemini chat response had no image data");
+  }
+
+  throw lastError || new Error("Gemini chat image generation failed");
+}
+
+async function tryGeminiGenerateContent({ baseURL, apiKey, model, prompt }) {
+  const endpoint = `${baseURL}/models/${encodeURIComponent(model)}:generateContent`;
+  logger.info("Trying Gemini generateContent", { endpoint, model });
+
+  const { response, payload } = await postJson(endpoint, apiKey, {
+    contents: [
+      {
+        role: "user",
+        parts: [{ text: prompt }],
+      },
+    ],
+    generationConfig: {
+      responseModalities: ["TEXT", "IMAGE"],
+      imageConfig: {
+        aspectRatio: "16:9",
+        imageSize: "2K",
+      },
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(
+      `Gemini generateContent error: ${payload.error?.message || payload.message || response.statusText}`,
+    );
+  }
+
+  const image = extractImagePayload(payload);
+  if (!image) {
+    throw new Error("Gemini generateContent response had no image data");
+  }
+
+  return image;
+}
+
 async function generateAnalysisCardWithApi(analysis) {
   const apiKey = normalizeApiKey(config.image.apiKey);
   if (!apiKey) {
@@ -87,7 +268,7 @@ async function generateAnalysisCardWithApi(analysis) {
 
   if (!config.image.baseURL) {
     throw new Error(
-      "IMAGE_BASE_URL is missing. Create an Arvan image-model endpoint and put its /v1 gateway URL here.",
+      "IMAGE_BASE_URL is missing. Use IMAGE_BASE_URL (not OPENAI_BASE_URL) for the image model gateway.",
     );
   }
 
@@ -96,40 +277,35 @@ async function generateAnalysisCardWithApi(analysis) {
   }
 
   const prompt = await buildImagePrompt(analysis);
-  const endpoint = `${config.image.baseURL.replace(/\/$/, "")}/images/generations`;
+  const baseURL = config.image.baseURL.replace(/\/$/, "");
+  const model = config.image.model;
 
-  logger.info("Generating analysis card via image API", {
-    endpoint,
-    model: config.image.model,
-    size: config.image.size,
-  });
+  const attempts = isGeminiImageModel(model)
+    ? [
+        () => tryGeminiChatCompletions({ baseURL, apiKey, model, prompt }),
+        () => tryGeminiGenerateContent({ baseURL, apiKey, model, prompt }),
+        () => tryOpenAiImages({ baseURL, apiKey, model, prompt }),
+      ]
+    : [
+        () => tryOpenAiImages({ baseURL, apiKey, model, prompt }),
+        () => tryGeminiChatCompletions({ baseURL, apiKey, model, prompt }),
+      ];
 
-  const response = await fetch(endpoint, {
-    method: "POST",
-    headers: {
-      Authorization: authHeader(apiKey, config.image.authScheme),
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model: config.image.model,
-      prompt,
-      n: 1,
-      size: config.image.size,
-      response_format: "b64_json",
-      quality: config.image.quality,
-    }),
-  });
+  let image = null;
+  const errors = [];
 
-  const payload = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    throw new Error(
-      `Image API error: ${payload.error?.message || payload.message || response.statusText}`,
-    );
+  for (const attempt of attempts) {
+    try {
+      image = await attempt();
+      break;
+    } catch (error) {
+      errors.push(error.message);
+      logger.warn("Image API attempt failed", { error: error.message });
+    }
   }
 
-  const item = payload.data?.[0];
-  if (!item) {
-    throw new Error("Image API returned no image data");
+  if (!image) {
+    throw new Error(`All image API attempts failed: ${errors.join(" | ")}`);
   }
 
   await fs.mkdir("output", { recursive: true });
@@ -138,10 +314,10 @@ async function generateAnalysisCardWithApi(analysis) {
     `${analysis.symbol}-api-card-${new Date().toISOString().replace(/[:.]/g, "-")}.png`,
   );
 
-  if (item.b64_json) {
-    await fs.writeFile(filePath, Buffer.from(item.b64_json, "base64"));
-  } else if (item.url) {
-    await downloadToFile(item.url, filePath);
+  if (image.b64_json) {
+    await fs.writeFile(filePath, Buffer.from(image.b64_json, "base64"));
+  } else if (image.url) {
+    await downloadToFile(image.url, filePath);
   } else {
     throw new Error("Image API response missing b64_json/url");
   }
