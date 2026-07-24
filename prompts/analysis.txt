@@ -30,7 +30,9 @@ How to build the report from the research:
 4) Copy/normalize Key Levels into key_support / key_resistance / current_range.
 5) Build scenarios from the research Tips + technical bias; probabilities must reflect the research tone.
 6) long_confirm / short_confirm must come from the research tips/levels, not invented setups.
-7) final_verdict and trading_suggestion must summarize the same research roadmap.
+7) At the end, explain existing scenarios simply: how LONG would be confirmed and how SHORT would be confirmed.
+8) Keep confirmation language simple and practical (zone + 2-3 clear conditions + invalidation).
+9) final_verdict and trading_suggestion must summarize the same research roadmap.
 
 JSON schema:
 {

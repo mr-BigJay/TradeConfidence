@@ -512,25 +512,25 @@ function buildAnalysisCardHtml(analysis, candles = []) {
     </div>
 
     <div class="panel">
-      <div class="section-title">تأییدیه ورود سناریو (کجا و چطور)</div>
+      <div class="section-title">چطور سناریوها تأیید می‌شوند؟</div>
       <div class="confirm-grid">
         <div class="confirm long">
-          <h3>لانگ</h3>
+          <h3>لانگ کی تأیید می‌شود؟</h3>
           <div class="zone">کجا: ${escapeHtml(longConfirm.zone || "نامشخص")}</div>
           <ul>${longHow || "<li>شرط تأیید مشخص نشده</li>"}</ul>
           ${
             longConfirm.invalidation
-              ? `<div class="inv">باطل‌کننده: ${escapeHtml(longConfirm.invalidation)}</div>`
+              ? `<div class="inv">باطل: ${escapeHtml(longConfirm.invalidation)}</div>`
               : ""
           }
         </div>
         <div class="confirm short">
-          <h3>شورت</h3>
+          <h3>شورت کی تأیید می‌شود؟</h3>
           <div class="zone">کجا: ${escapeHtml(shortConfirm.zone || "نامشخص")}</div>
           <ul>${shortHow || "<li>شرط تأیید مشخص نشده</li>"}</ul>
           ${
             shortConfirm.invalidation
-              ? `<div class="inv">باطل‌کننده: ${escapeHtml(shortConfirm.invalidation)}</div>`
+              ? `<div class="inv">باطل: ${escapeHtml(shortConfirm.invalidation)}</div>`
               : ""
           }
         </div>
