@@ -64,5 +64,8 @@ module.exports = {
     cardScale: parsePositiveInteger(process.env.CARD_SCALE, 2),
     // Default and invalid values always use server-side HTML rendering.
     cardMode: ["api", "html", "auto"].includes(cardMode) ? cardMode : "html",
+    // Free Bitunix Data tab metrics (1h), sourced via public Bitunix APIs.
+    bitunixDataEnabled: parseBoolean(process.env.BITUNIX_DATA_ENABLED, true),
+    bitunixInterval: process.env.BITUNIX_INTERVAL || "1h",
   },
 };

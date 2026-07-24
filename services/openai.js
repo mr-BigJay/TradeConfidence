@@ -61,9 +61,16 @@ function parseJsonContent(content) {
   }
 }
 
-async function analyzeAiResearch({ symbol, text }) {
+async function analyzeAiResearch({ symbol, text, bitunixData = null }) {
   const template = await getPromptTemplate();
-  const prompt = template.replace("{{AI_RESEARCH_TEXT}}", text);
+  const bitunixBlock =
+    bitunixData?.checklistText ||
+    (bitunixData ? JSON.stringify(bitunixData, null, 2) : "Bitunix data unavailable");
+
+  const prompt = template
+    .replace("{{AI_RESEARCH_TEXT}}", text || "")
+    .replace("{{BITUNIX_DATA}}", bitunixBlock);
+
   const openai = getClient();
 
   const request = {
@@ -72,7 +79,7 @@ async function analyzeAiResearch({ symbol, text }) {
       {
         role: "system",
         content:
-          "You produce strict JSON for Persian crypto market status dashboard cards. You never provide financial advice or direct buy/sell signals.",
+          "You produce strict JSON for Persian crypto market status dashboard cards. You never provide financial advice or direct buy/sell signals. Prefer Bitunix 1h derivatives checklist when present.",
       },
       {
         role: "user",

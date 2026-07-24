@@ -10,6 +10,7 @@ const {
 const logger = require("../logger");
 const { scrapeAiResearch } = require("../playwright/scraper");
 const { analyzeAiResearch } = require("./openai");
+const { fetchBitunixMarketData } = require("./bitunixData");
 const { renderCard } = require("./cardRenderer");
 const { sendMarketStatus } = require("./telegram");
 const { buildContentFingerprint, isSameResearch } = require("./contentFingerprint");
@@ -96,11 +97,32 @@ async function processSymbol(symbol, options = {}) {
       sourceUpdatedAt: fingerprint.sourceUpdatedAt,
     });
 
+    let bitunixData = null;
+    if (config.runtime.bitunixDataEnabled) {
+      try {
+        bitunixData = await fetchBitunixMarketData(symbol, {
+          interval: config.runtime.bitunixInterval || "1h",
+        });
+        await saveEvent({
+          symbol,
+          event: "bitunix_success",
+          message: `interval=${bitunixData.interval}; funding=${bitunixData.fundingRatePercent}%`,
+        });
+      } catch (error) {
+        logger.error("Bitunix data fetch failed; continuing with CoinEx text only", {
+          symbol,
+          error: error.message,
+        });
+        await saveEvent({ symbol, event: "bitunix_error", message: error.message });
+      }
+    }
+
     const analysis = await analyzeAiResearch({
       symbol,
       text: scrapeResult.text,
+      bitunixData,
     });
-    logger.info("GPT success", { symbol });
+    logger.info("GPT success", { symbol, hasBitunix: Boolean(bitunixData) });
     await saveEvent({ symbol, event: "gpt_success", message: "OpenAI analysis created" });
 
     await saveAnalysis({

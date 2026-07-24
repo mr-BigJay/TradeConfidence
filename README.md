@@ -137,6 +137,23 @@ The default schedule checks BTC every 60 minutes. If the extracted AI Research
 text has not changed since the previous successful scrape, OpenAI and Telegram
 are skipped to avoid duplicate messages and unnecessary API cost.
 
+## Bitunix Data (free, 1h)
+
+On each analysis run the bot also fetches free Bitunix public Data metrics
+(OI, funding, long/short accounts, top-trader ratios, liquidation clusters)
+on the **1h** timeframe and feeds them into the GPT prompt as a checklist.
+
+```env
+BITUNIX_DATA_ENABLED=true
+BITUNIX_INTERVAL=1h
+```
+
+Smoke-test the free data feed:
+
+```bash
+npm run test:bitunix
+```
+
 Force a full run even if the text is unchanged:
 
 ```bash

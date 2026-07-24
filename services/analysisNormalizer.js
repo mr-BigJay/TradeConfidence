@@ -51,6 +51,28 @@ function asFundamentals(value) {
   }));
 }
 
+function asChecklist(value) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value.slice(0, 8).map((item) => ({
+    name: item?.name || "شاخص",
+    value: item?.value || "-",
+    result: item?.result || "نامشخص",
+    tone: asTone(item?.tone),
+    note: item?.note || "",
+  }));
+}
+
+function asScore(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) {
+    return null;
+  }
+  return Math.max(0, Math.min(10, Math.round(n * 10) / 10));
+}
+
 function normalizeAnalysis(symbol, analysis) {
   const pairLabel =
     analysis.pair_label ||
@@ -70,6 +92,10 @@ function normalizeAnalysis(symbol, analysis) {
     market_summary: analysis.market_summary || analysis.summary || "",
     market_battle_points: asArray(analysis.market_battle_points).slice(0, 4),
     regime: analysis.regime || "Consolidation",
+    derivatives_checklist: asChecklist(analysis.derivatives_checklist),
+    long_score: asScore(analysis.long_score),
+    short_score: asScore(analysis.short_score),
+    confirmation_watch: asArray(analysis.confirmation_watch).slice(0, 6),
     fundamentals: asFundamentals(analysis.fundamentals),
     technical_long_term: {
       bias: technicalLong.bias || analysis.long_term_trend || "نامشخص",

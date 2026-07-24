@@ -39,6 +39,17 @@ function formatDeepAnalysisMessage(analysis) {
     .map((item) => `${toneEmoji(item.tone)} ${item.name}: ${item.status}`)
     .join("\n");
 
+  const checklist = (analysis.derivatives_checklist || [])
+    .map(
+      (item) =>
+        `${toneEmoji(item.tone)} ${item.name}: ${item.value} → ${item.result}${
+          item.note ? `\n${item.note}` : ""
+        }`,
+    )
+    .join("\n\n");
+
+  const confirmationWatch = joinLines(analysis.confirmation_watch || [], "•");
+
   return [
     `# ${analysis.title || "تحلیل اختصاصی BTC"}`,
     "",
@@ -49,6 +60,13 @@ function formatDeepAnalysisMessage(analysis) {
     analysis.market_summary || analysis.summary || "نامشخص",
     battlePoints ? `\nنبرد اصلی بازار:\n${battlePoints}` : "",
     analysis.regime ? `\nفاز فعلی: ${analysis.regime}` : "",
+    "",
+    "# چک‌لیست مشتقه (Bitunix / 1h)",
+    checklist || "داده Bitunix در این اجرا موجود نبود",
+    analysis.long_score !== null && analysis.long_score !== undefined
+      ? `\nامتیاز لانگ: ${analysis.long_score}/10 | امتیاز شورت: ${analysis.short_score ?? "-"}/10`
+      : "",
+    confirmationWatch ? `\nنشانه‌های تأیید/هشدار:\n${confirmationWatch}` : "",
     "",
     "# تحلیل فاندامنتال",
     fundamentals || "داده‌ای موجود نیست",
