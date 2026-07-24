@@ -1,6 +1,7 @@
 const fs = require("node:fs/promises");
 const path = require("node:path");
 const { chromium } = require("playwright");
+const config = require("../config/config");
 const logger = require("../logger");
 const { buildAnalysisCardHtml } = require("./cardTemplate");
 const { fetchFuturesKlines } = require("./marketData");
@@ -47,16 +48,23 @@ async function renderAnalysisCard(analysis) {
     `${analysis.symbol}-card-${new Date().toISOString().replace(/[:.]/g, "-")}.png`,
   );
 
+  const scale = Math.min(Math.max(config.runtime.cardScale || 1, 1), 2);
   let browser;
+
   try {
     browser = await launchBrowser();
     const page = await browser.newPage({
-      viewport: { width: 1280, height: 960 },
-      deviceScaleFactor: 1,
+      viewport: { width: 1400, height: 1100 },
+      deviceScaleFactor: scale,
     });
 
-    await page.setContent(html, { waitUntil: "networkidle", timeout: 45000 });
-    await page.waitForTimeout(800);
+    await page.setContent(html, { waitUntil: "domcontentloaded", timeout: 45000 });
+    await page.evaluate(async () => {
+      if (document.fonts?.ready) {
+        await document.fonts.ready;
+      }
+    });
+    await page.waitForTimeout(1200);
 
     const card = page.locator("#analysis-card");
     await card.screenshot({
@@ -64,7 +72,7 @@ async function renderAnalysisCard(analysis) {
       type: "png",
     });
 
-    logger.info("Analysis card image created", { filePath });
+    logger.info("Analysis card image created", { filePath, scale });
     return filePath;
   } finally {
     if (browser) {
