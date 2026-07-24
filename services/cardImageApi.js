@@ -35,6 +35,15 @@ function isGeminiImageModel(modelName = "") {
   return /gemini/i.test(modelName) && /image/i.test(modelName);
 }
 
+function summarizePayload(payload) {
+  try {
+    const text = JSON.stringify(payload);
+    return text.slice(0, 800);
+  } catch {
+    return String(payload).slice(0, 800);
+  }
+}
+
 async function buildImagePrompt(analysis) {
   const template = await fs.readFile(path.join("prompts", "card-image.txt"), "utf8");
 
@@ -83,29 +92,49 @@ async function downloadToFile(url, filePath) {
   await fs.writeFile(filePath, buffer);
 }
 
+function fromDataUrl(url) {
+  if (!url || !String(url).startsWith("data:image")) {
+    return null;
+  }
+
+  const parts = String(url).split(",");
+  return parts[1] || null;
+}
+
 function extractImagePayload(payload) {
   const direct = payload?.data?.[0];
   if (direct?.b64_json || direct?.url) {
-    return direct;
+    return {
+      b64_json: direct.b64_json || fromDataUrl(direct.url),
+      url: direct.b64_json ? null : direct.url,
+    };
   }
 
   const message = payload?.choices?.[0]?.message;
   if (message?.images?.[0]) {
     const image = message.images[0];
+    const url = image.url || image.image_url?.url || null;
     return {
-      b64_json: image.b64_json || image.data || null,
-      url: image.url || null,
+      b64_json: image.b64_json || image.data || fromDataUrl(url),
+      url: fromDataUrl(url) ? null : url,
     };
+  }
+
+  if (typeof message?.content === "string") {
+    const dataUrlMatch = message.content.match(/data:image\/[a-zA-Z0-9+]+;base64,[A-Za-z0-9+/=\s]+/);
+    if (dataUrlMatch) {
+      return { b64_json: fromDataUrl(dataUrlMatch[0].replace(/\s+/g, "")), url: null };
+    }
   }
 
   if (Array.isArray(message?.content)) {
     for (const part of message.content) {
-      if (part?.type === "image_url" && part?.image_url?.url) {
-        const url = part.image_url.url;
-        if (url.startsWith("data:image")) {
-          return { b64_json: url.split(",")[1], url: null };
-        }
-        return { b64_json: null, url };
+      const url = part?.image_url?.url || part?.url || null;
+      if (url) {
+        return {
+          b64_json: fromDataUrl(url),
+          url: fromDataUrl(url) ? null : url,
+        };
       }
       if (part?.inline_data?.data || part?.inlineData?.data) {
         return {
@@ -119,6 +148,7 @@ function extractImagePayload(payload) {
   const parts =
     payload?.candidates?.[0]?.content?.parts ||
     payload?.candidates?.[0]?.content?.[0]?.parts ||
+    payload?.content?.parts ||
     [];
 
   for (const part of parts) {
@@ -168,13 +198,13 @@ async function tryOpenAiImages({ baseURL, apiKey, model, prompt }) {
 
   if (!response.ok) {
     throw new Error(
-      `OpenAI images error: ${payload.error?.message || payload.message || response.statusText}`,
+      `OpenAI images error: ${payload.error?.message || payload.message || response.statusText} | ${summarizePayload(payload)}`,
     );
   }
 
   const image = extractImagePayload(payload);
   if (!image) {
-    throw new Error("OpenAI images response had no image data");
+    throw new Error(`OpenAI images response had no image data | ${summarizePayload(payload)}`);
   }
 
   return image;
@@ -194,13 +224,11 @@ async function tryGeminiChatCompletions({ baseURL, apiKey, model, prompt }) {
       model,
       messages: [{ role: "user", content: prompt }],
       response_modalities: ["TEXT", "IMAGE"],
-      generationConfig: {
-        responseModalities: ["TEXT", "IMAGE"],
-        imageConfig: {
-          aspectRatio: "16:9",
-          imageSize: "2K",
-        },
-      },
+    },
+    {
+      model,
+      messages: [{ role: "user", content: `Generate only an image. ${prompt}` }],
+      modalities: ["image"],
     },
   ];
 
@@ -210,7 +238,7 @@ async function tryGeminiChatCompletions({ baseURL, apiKey, model, prompt }) {
     const { response, payload } = await postJson(endpoint, apiKey, body);
     if (!response.ok) {
       lastError = new Error(
-        `Gemini chat image error: ${payload.error?.message || payload.message || response.statusText}`,
+        `Gemini chat image error: ${payload.error?.message || payload.message || response.statusText} | ${summarizePayload(payload)}`,
       );
       continue;
     }
@@ -220,44 +248,59 @@ async function tryGeminiChatCompletions({ baseURL, apiKey, model, prompt }) {
       return image;
     }
 
-    lastError = new Error("Gemini chat response had no image data");
+    lastError = new Error(`Gemini chat response had no image data | ${summarizePayload(payload)}`);
   }
 
   throw lastError || new Error("Gemini chat image generation failed");
 }
 
 async function tryGeminiGenerateContent({ baseURL, apiKey, model, prompt }) {
-  const endpoint = `${baseURL}/models/${encodeURIComponent(model)}:generateContent`;
-  logger.info("Trying Gemini generateContent", { endpoint, model });
+  const endpoints = [
+    `${baseURL}:generateContent`,
+    `${baseURL}/generateContent`,
+    `${baseURL}/models/${encodeURIComponent(model)}:generateContent`,
+  ];
 
-  const { response, payload } = await postJson(endpoint, apiKey, {
-    contents: [
-      {
-        role: "user",
-        parts: [{ text: prompt }],
-      },
-    ],
-    generationConfig: {
-      responseModalities: ["TEXT", "IMAGE"],
-      imageConfig: {
-        aspectRatio: "16:9",
-        imageSize: "2K",
-      },
-    },
-  });
+  let lastError = null;
 
-  if (!response.ok) {
-    throw new Error(
-      `Gemini generateContent error: ${payload.error?.message || payload.message || response.statusText}`,
+  for (const endpoint of endpoints) {
+    logger.info("Trying Gemini generateContent", { endpoint, model });
+
+    const { response, payload } = await postJson(endpoint, apiKey, {
+      model,
+      contents: [
+        {
+          role: "user",
+          parts: [{ text: prompt }],
+        },
+      ],
+      generationConfig: {
+        responseModalities: ["TEXT", "IMAGE"],
+        imageConfig: {
+          aspectRatio: "16:9",
+          imageSize: "2K",
+        },
+      },
+    });
+
+    if (!response.ok) {
+      lastError = new Error(
+        `Gemini generateContent error: ${payload.error?.message || payload.message || response.statusText} | ${summarizePayload(payload)}`,
+      );
+      continue;
+    }
+
+    const image = extractImagePayload(payload);
+    if (image) {
+      return image;
+    }
+
+    lastError = new Error(
+      `Gemini generateContent response had no image data | ${summarizePayload(payload)}`,
     );
   }
 
-  const image = extractImagePayload(payload);
-  if (!image) {
-    throw new Error("Gemini generateContent response had no image data");
-  }
-
-  return image;
+  throw lastError || new Error("Gemini generateContent failed");
 }
 
 async function generateAnalysisCardWithApi(analysis) {
@@ -305,7 +348,7 @@ async function generateAnalysisCardWithApi(analysis) {
   }
 
   if (!image) {
-    throw new Error(`All image API attempts failed: ${errors.join(" | ")}`);
+    throw new Error(`All image API attempts failed: ${errors.join(" || ")}`);
   }
 
   await fs.mkdir("output", { recursive: true });
