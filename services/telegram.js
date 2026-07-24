@@ -2,7 +2,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const config = require("../config/config");
 
-const TELEGRAM_MESSAGE_LIMIT = 3900;
+const TELEGRAM_MESSAGE_LIMIT = 3500;
 
 function requireTelegramConfig() {
   if (!config.telegram.botToken) {
@@ -24,38 +24,24 @@ function joinLines(items, bullet = "•") {
   return (items || []).map((item) => `${bullet} ${item}`).join("\n");
 }
 
-function formatDateFa(date = new Date()) {
-  try {
-    return new Intl.DateTimeFormat("fa-IR", {
-      dateStyle: "long",
-      timeStyle: "short",
-      timeZone: "UTC",
-    }).format(date);
-  } catch (error) {
-    return date.toISOString().replace("T", " ").slice(0, 16) + " UTC";
-  }
+function clip(text, max) {
+  const value = String(text || "").trim();
+  if (!value) return "";
+  if (value.length <= max) return value;
+  return `${value.slice(0, Math.max(0, max - 1)).trim()}…`;
 }
 
 /**
- * Deep desk-style Persian report matching the user's preferred ChatGPT format.
+ * Short practical Persian note:
+ * what is happening + what user should do + simple long/short confirmations.
  */
 function formatDeepAnalysisMessage(analysis) {
+  const supports = (analysis.key_support || []).slice(0, 3).join(" | ") || "نامشخص";
+  const resistances = (analysis.key_resistance || []).slice(0, 3).join(" | ") || "نامشخص";
+  const battlePoints = joinLines((analysis.market_battle_points || []).slice(0, 2), "•");
   const fundamentals = (analysis.fundamentals || [])
-    .map(
-      (item) =>
-        `${toneEmoji(item.tone)} ${item.title}\n${item.text}${
-          item.weight ? `\nوزن: ${item.weight}` : ""
-        }`,
-    )
-    .join("\n\n");
-
-  const longWarnings = joinLines(analysis.technical_long_term?.warnings || [], "❌");
-  const longPositives = joinLines(analysis.technical_long_term?.positives || [], "✅");
-  const shortPoints = joinLines(analysis.technical_short_term?.points || [], "•");
-  const battlePoints = joinLines(analysis.market_battle_points || [], "•");
-  const comparison = joinLines(analysis.previous_report_comparison || [], "•");
-  const indicators = (analysis.indicators || [])
-    .map((item) => `${toneEmoji(item.tone)} ${item.name}: ${item.status}`)
+    .slice(0, 3)
+    .map((item) => `${toneEmoji(item.tone)} ${item.title}: ${clip(item.text, 90)}`)
     .join("\n");
 
   const longConfirm = analysis.long_confirm || {};
@@ -63,131 +49,57 @@ function formatDeepAnalysisMessage(analysis) {
   const longHow = joinLines((longConfirm.how || []).slice(0, 3), "•");
   const shortHow = joinLines((shortConfirm.how || []).slice(0, 3), "•");
 
-  const supports = joinLines(analysis.key_support || [], "🟢") || "نامشخص";
-  const resistances = joinLines(analysis.key_resistance || [], "🔴") || "نامشخص";
+  const whatToDo = clip(
+    analysis.trading_suggestion || analysis.short_term_strategy || analysis.final_verdict || "",
+    220,
+  );
 
-  return [
-    `# ${analysis.title || "تحلیل اختصاصی BTC"}`,
-    "",
-    `تاریخ: ${formatDateFa()}`,
+  const message = [
+    `${analysis.pair_label || analysis.symbol} — وضعیت بازار`,
     `بایاس: ${analysis.bias || "خنثی"} | اطمینان: ${analysis.confidence || 0}% | قیمت: ${analysis.current_price || "-"}`,
-    analysis.long_score !== null && analysis.long_score !== undefined
-      ? `امتیاز لانگ: ${analysis.long_score}/10 | امتیاز شورت: ${analysis.short_score ?? "-"}/10`
-      : "",
     "",
-    "# خلاصه بازار",
-    "مبتنی بر گزارش پژوهشی فعلی:",
-    analysis.market_summary || analysis.summary || "نامشخص",
-    battlePoints ? `\nنبرد اصلی بازار:\n${battlePoints}` : "",
+    "الان بازار چه وضعی دارد؟",
+    clip(analysis.market_summary || analysis.summary || "نامشخص", 220),
+    battlePoints ? `\n${battlePoints}` : "",
     "",
-    "# تحلیل فاندامنتال",
-    "(برگرفته از بخش اخبار/فاندامنتال گزارش پژوهشی)",
-    fundamentals || "در گزارش پژوهشی مورد فاندامنتال واضحی نبود",
+    fundamentals ? `نکات مهم:\n${fundamentals}\n` : "",
+    "سطوح مهم",
+    `حمایت: ${supports}`,
+    `مقاومت: ${resistances}`,
+    analysis.current_range ? `محدوده: ${analysis.current_range}` : "",
     "",
-    "# تحلیل تکنیکال",
-    "(برگرفته از سیگنال‌های تکنیکال گزارش پژوهشی)",
+    "کاربر الان چه کار کند؟",
+    whatToDo || "صبر کند و سطوح بالا را رصد کند.",
     "",
-    "## روند بلندمدت",
-    `وضعیت: ${analysis.technical_long_term?.bias || analysis.long_term_trend || "نامشخص"}`,
-    analysis.technical_long_term?.text || "",
-    longPositives ? `\nنکات مثبت:\n${longPositives}` : "",
-    longWarnings ? `\nهشدارها:\n${longWarnings}` : "",
+    "سناریوها",
+    `🔴 شورت/نزولی (${analysis.bearish_scenario_probability || 0}%): ${clip(analysis.bearish_scenario, 120)}`,
+    `🟢 لانگ/صعودی (${analysis.bullish_scenario_probability || 0}%): ${clip(analysis.bullish_scenario, 120)}`,
     "",
-    "## روند کوتاه‌مدت",
-    `وضعیت: ${analysis.technical_short_term?.bias || analysis.short_term_trend || "نامشخص"}`,
-    analysis.technical_short_term?.text || "",
-    shortPoints ? `\n${shortPoints}` : "",
+    "چطور ورود تأیید می‌شود؟",
     "",
-    "# سطوح مهم بازار",
-    "",
-    "## حمایت‌ها",
-    supports,
-    "",
-    "## مقاومت‌ها",
-    resistances,
-    analysis.current_range ? `\nمحدوده فعلی: ${analysis.current_range}` : "",
-    "",
-    "# سناریوهای احتمالی",
-    "",
-    `## 🔴 سناریوی نزولی (${analysis.bearish_scenario_probability || 0}%)`,
-    analysis.bearish_scenario || "نامشخص",
-    analysis.bearish_targets?.length ? `اهداف: ${analysis.bearish_targets.join(" | ")}` : "",
-    "",
-    Number(analysis.neutral_scenario_probability) > 0
-      ? `## 🟠 سناریوی خنثی (${analysis.neutral_scenario_probability}%)\n${analysis.neutral_scenario || "نامشخص"}\n`
-      : "",
-    `## 🟢 سناریوی صعودی (${analysis.bullish_scenario_probability || 0}%)`,
-    analysis.bullish_scenario || "نامشخص",
-    analysis.bullish_targets?.length ? `اهداف: ${analysis.bullish_targets.join(" | ")}` : "",
-    "",
-    "# ارزیابی اندیکاتورها",
-    indicators || "نامشخص",
-    "",
-    comparison ? `# مقایسه با گزارش قبلی\n${comparison}\n` : "",
-    "# جمع‌بندی نهایی",
-    analysis.final_verdict || analysis.summary || "نامشخص",
-    "",
-    `• روند بلندمدت: ${analysis.long_term_trend || "نامشخص"}`,
-    `• روند کوتاه‌مدت: ${analysis.short_term_trend || "نامشخص"}`,
-    `• احتمال سناریوی نزولی: ${analysis.bearish_probability || analysis.bearish_scenario_probability || 0}%`,
-    `• احتمال سناریوی صعودی: ${analysis.bullish_probability || analysis.bullish_scenario_probability || 0}%`,
-    "",
-    "# چطور سناریوها تأیید می‌شوند؟",
-    "",
-    `## 🟢 ورود لانگ چه زمانی تأیید می‌شود؟ (${analysis.bullish_scenario_probability || 0}%)`,
-    `سناریو: ${analysis.bullish_scenario || "نامشخص"}`,
-    `کجا: ${longConfirm.zone || "نامشخص"}`,
+    `🟢 لانگ`,
+    `کجا: ${clip(longConfirm.zone, 100)}`,
     longHow ? `چطور:\n${longHow}` : "",
-    longConfirm.invalidation ? `اگر این رخ بدهد، لانگ باطل است: ${longConfirm.invalidation}` : "",
+    longConfirm.invalidation ? `باطل اگر: ${clip(longConfirm.invalidation, 90)}` : "",
     "",
-    `## 🔴 ورود شورت چه زمانی تأیید می‌شود؟ (${analysis.bearish_scenario_probability || 0}%)`,
-    `سناریو: ${analysis.bearish_scenario || "نامشخص"}`,
-    `کجا: ${shortConfirm.zone || "نامشخص"}`,
+    `🔴 شورت`,
+    `کجا: ${clip(shortConfirm.zone, 100)}`,
     shortHow ? `چطور:\n${shortHow}` : "",
-    shortConfirm.invalidation ? `اگر این رخ بدهد، شورت باطل است: ${shortConfirm.invalidation}` : "",
+    shortConfirm.invalidation ? `باطل اگر: ${clip(shortConfirm.invalidation, 90)}` : "",
     "",
-    "⚠️ دستور خرید/فروش نیست؛ فقط شرط تأیید سناریو بر اساس گزارش پژوهشی.",
+    "⚠️ دستور خرید/فروش نیست؛ فقط راهنمای رصد و تأیید سناریو.",
   ]
     .filter((line) => line !== "")
     .join("\n");
+
+  return clip(message, TELEGRAM_MESSAGE_LIMIT);
 }
 
 function formatCardCaption(analysis) {
-  return [
+  return clip(
     `${analysis.pair_label || analysis.symbol} | ${analysis.bias || "خنثی"} | ${analysis.confidence || 0}%`,
-    `محدوده: ${analysis.current_range || "نامشخص"}`,
-  ].join("\n");
-}
-
-function splitTelegramText(text, maxLength = TELEGRAM_MESSAGE_LIMIT) {
-  if (text.length <= maxLength) {
-    return [text];
-  }
-
-  const chunks = [];
-  let remaining = text;
-
-  while (remaining.length > maxLength) {
-    let cut = remaining.lastIndexOf("\n# ", maxLength);
-    if (cut < maxLength * 0.4) {
-      cut = remaining.lastIndexOf("\n\n", maxLength);
-    }
-    if (cut < maxLength * 0.4) {
-      cut = remaining.lastIndexOf("\n", maxLength);
-    }
-    if (cut < maxLength * 0.4) {
-      cut = maxLength;
-    }
-
-    chunks.push(remaining.slice(0, cut).trim());
-    remaining = remaining.slice(cut).trim();
-  }
-
-  if (remaining) {
-    chunks.push(remaining);
-  }
-
-  return chunks;
+    180,
+  );
 }
 
 async function sendTelegramMessage(text) {
@@ -244,16 +156,14 @@ async function sendTelegramPhoto(imagePath, caption) {
 }
 
 async function sendMarketStatus(analysis, imagePath = null) {
-  const deepReport = formatDeepAnalysisMessage(analysis);
+  const report = formatDeepAnalysisMessage(analysis);
 
   if (imagePath) {
     await sendTelegramPhoto(imagePath, formatCardCaption(analysis));
   }
 
-  // Deep desk report may need 1-2 Telegram messages; split on section headers only.
-  for (const chunk of splitTelegramText(deepReport)) {
-    await sendTelegramMessage(chunk);
-  }
+  // Keep as one practical Telegram message.
+  await sendTelegramMessage(report);
 }
 
 module.exports = {

@@ -465,13 +465,20 @@ function buildAnalysisCardHtml(analysis, candles = []) {
     </div>
 
     <div class="panel">
-      <div class="section-title">شرح تحلیل پژوهشی</div>
+      <div class="section-title">الان بازار چه وضعی دارد؟</div>
       <div class="summary">${escapeHtml(summary)}</div>
     </div>
 
     <div class="panel">
       <div class="section-title">نمودار قیمت (1H)</div>
       ${buildCandleSvg(candles, analysis)}
+    </div>
+
+    <div class="panel">
+      <div class="section-title">کاربر چه کار کند؟</div>
+      <div class="summary">${escapeHtml(
+        analysis.trading_suggestion || analysis.short_term_strategy || summary,
+      )}</div>
     </div>
 
     <div class="panel">
