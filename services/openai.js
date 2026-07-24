@@ -61,17 +61,9 @@ function parseJsonContent(content) {
   }
 }
 
-async function analyzeAiResearch({ symbol, text, bitunixData = null }) {
+async function analyzeAiResearch({ symbol, text }) {
   const template = await getPromptTemplate();
-  const bitunixBlock =
-    bitunixData?.checklistText ||
-    (bitunixData ? JSON.stringify(bitunixData, null, 2) : "Bitunix data unavailable");
-
-  // CoinEx roadmap first in the user payload ordering of sections in the prompt file.
-  const prompt = template
-    .replace("{{BITUNIX_DATA}}", bitunixBlock)
-    .replace("{{AI_RESEARCH_TEXT}}", text || "");
-
+  const prompt = template.replace("{{AI_RESEARCH_TEXT}}", text || "");
   const openai = getClient();
 
   const request = {
@@ -80,7 +72,7 @@ async function analyzeAiResearch({ symbol, text, bitunixData = null }) {
       {
         role: "system",
         content:
-          "You produce strict JSON for Persian crypto market status. AI Research text is the main roadmap; 1h derivatives checklist only confirms or challenges it. Write clean formal Persian with no typos. Never mention CoinEx, Bitunix, Coinglass, کوینکس, or بیتونیکس in any output field. Keep text compact for one Telegram message. Never give direct buy/sell orders. Always include long_confirm and short_confirm.",
+          "You produce strict JSON for Persian crypto market status. Explain only the provided AI Research text as the roadmap. Write clean formal Persian with no typos. Never mention CoinEx, Bitunix, Coinglass, کوینکس, or بیتونیکس. Keep text compact for one Telegram message. Never give direct buy/sell orders. Always include long_confirm and short_confirm.",
       },
       {
         role: "user",

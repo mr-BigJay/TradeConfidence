@@ -2,7 +2,6 @@ const fs = require("node:fs");
 const path = require("node:path");
 const config = require("../config/config");
 
-// Keep the whole text report inside one Telegram message.
 const TELEGRAM_SINGLE_MESSAGE_LIMIT = 3500;
 
 function requireTelegramConfig() {
@@ -13,28 +12,6 @@ function requireTelegramConfig() {
   if (!config.telegram.chatId) {
     throw new Error("TELEGRAM_CHAT_ID is missing");
   }
-}
-
-function toneEmoji(tone) {
-  if (tone === "bullish") return "🟢";
-  if (tone === "bearish") return "🔴";
-  return "🟠";
-}
-
-function uniqueChecklist(items) {
-  const seen = new Set();
-  const out = [];
-  for (const item of items || []) {
-    const key = String(item.name || "")
-      .toLowerCase()
-      .replace(/\s+/g, " ")
-      .trim();
-    if (!key || seen.has(key)) continue;
-    seen.add(key);
-    out.push(item);
-    if (out.length >= 6) break;
-  }
-  return out;
 }
 
 function joinLines(items, bullet = "•") {
@@ -48,24 +25,19 @@ function clip(text, max) {
 }
 
 /**
- * One compact Telegram message:
- * research roadmap first, derivatives confirmation second, then long/short confirms.
+ * One compact Telegram message explaining the research roadmap only.
  * Never mention exchange brand names in user-facing text.
  */
 function formatDeepAnalysisMessage(analysis) {
-  const checklist = uniqueChecklist(analysis.derivatives_checklist)
-    .map((item) => `${toneEmoji(item.tone)} ${item.name}: ${item.value} → ${item.result}`)
-    .join("\n");
-
   const battlePoints = joinLines((analysis.market_battle_points || []).slice(0, 3), "•");
   const supports = (analysis.key_support || []).slice(0, 3).join(" | ") || "نامشخص";
   const resistances = (analysis.key_resistance || []).slice(0, 3).join(" | ") || "نامشخص";
 
   const roadmap = clip(
     analysis.market_summary || analysis.summary || analysis.final_verdict || "نامشخص",
-    420,
+    520,
   );
-  const verdict = clip(analysis.final_verdict || analysis.summary || "نامشخص", 280);
+  const verdict = clip(analysis.final_verdict || analysis.summary || "نامشخص", 300);
 
   const longConfirm = analysis.long_confirm || {};
   const shortConfirm = analysis.short_confirm || {};
@@ -80,14 +52,11 @@ function formatDeepAnalysisMessage(analysis) {
   const message = [
     `${analysis.pair_label || analysis.symbol} — وضعیت بازار`,
     `بایاس: ${analysis.bias || "خنثی"} | اطمینان: ${analysis.confidence || 0}% | قیمت: ${analysis.current_price || "-"}`,
+    scoreLine || "",
     "",
-    "نقشه راه پژوهشی",
+    "شرح تحلیل پژوهشی",
     roadmap,
     battlePoints ? `\nنکات کلیدی:\n${battlePoints}` : "",
-    "",
-    "تأیید مشتقه (1H)",
-    checklist || "داده مشتقه موجود نبود",
-    scoreLine || "",
     "",
     "سطوح",
     `حمایت: ${supports}`,
@@ -95,11 +64,11 @@ function formatDeepAnalysisMessage(analysis) {
     analysis.current_range ? `محدوده: ${analysis.current_range}` : "",
     "",
     "سناریو",
-    `🟢 صعودی ${analysis.bullish_scenario_probability || 0}% — ${clip(analysis.bullish_scenario, 160)}`,
+    `🟢 صعودی ${analysis.bullish_scenario_probability || 0}% — ${clip(analysis.bullish_scenario, 180)}`,
     Number(analysis.neutral_scenario_probability) > 0
       ? `🟠 خنثی ${analysis.neutral_scenario_probability}% — ${clip(analysis.neutral_scenario, 120)}`
       : "",
-    `🔴 نزولی ${analysis.bearish_scenario_probability || 0}% — ${clip(analysis.bearish_scenario, 160)}`,
+    `🔴 نزولی ${analysis.bearish_scenario_probability || 0}% — ${clip(analysis.bearish_scenario, 180)}`,
     "",
     "تأیید لانگ",
     `کجا: ${clip(longConfirm.zone, 120)}`,
@@ -114,7 +83,7 @@ function formatDeepAnalysisMessage(analysis) {
     "جمع‌بندی",
     verdict,
     "",
-    "⚠️ دستور ورود نیست؛ فقط شرایط تأیید سناریو.",
+    "⚠️ دستور ورود نیست؛ فقط شرح وضعیت و شرایط تأیید سناریو.",
   ]
     .filter((line) => line !== "")
     .join("\n");
@@ -128,7 +97,6 @@ function formatCardCaption(analysis) {
       ? ` | L${analysis.long_score}/S${analysis.short_score ?? "-"}`
       : "";
 
-  // Keep caption tiny; full report is one separate message only.
   return clip(
     `${analysis.pair_label || analysis.symbol} | ${analysis.bias || "خنثی"} | ${analysis.confidence || 0}%${score}`,
     200,
@@ -195,7 +163,6 @@ async function sendMarketStatus(analysis, imagePath = null) {
     await sendTelegramPhoto(imagePath, formatCardCaption(analysis));
   }
 
-  // Always exactly one text message (never split into 2+).
   await sendTelegramMessage(report);
 }
 

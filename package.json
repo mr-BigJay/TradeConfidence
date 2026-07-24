@@ -9,8 +9,7 @@
     "run:force": "node main.js --once --force",
     "test:image-api": "node scripts/test-image-api.js",
     "scrape:btc": "node main.js --once --scrape-only",
-    "test:bitunix": "node -e \"require('./services/bitunixData').fetchBitunixMarketData('BTCUSDT',{interval:'1h'}).then(d=>{console.log(d.checklistText);}).catch(e=>{console.error(e);process.exit(1);})\"",
-    "test": "node --check main.js && node --check config/config.js && node --check playwright/scraper.js && node --check services/openai.js && node --check services/telegram.js && node --check services/pipeline.js && node --check services/cardImage.js && node --check services/cardImageApi.js && node --check services/cardRenderer.js && node --check services/cardTemplate.js && node --check services/marketData.js && node --check services/bitunixData.js && node --check services/analysisNormalizer.js && node --check services/contentFingerprint.js && node --check database/db.js && node --check logger.js"
+    "test": "node --check main.js && node --check config/config.js && node --check playwright/scraper.js && node --check services/openai.js && node --check services/telegram.js && node --check services/pipeline.js && node --check services/cardImage.js && node --check services/cardImageApi.js && node --check services/cardRenderer.js && node --check services/cardTemplate.js && node --check services/marketData.js && node --check services/analysisNormalizer.js && node --check services/contentFingerprint.js && node --check database/db.js && node --check logger.js"
   },
   "repository": {
     "type": "git",

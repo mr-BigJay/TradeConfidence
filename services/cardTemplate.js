@@ -161,36 +161,6 @@ function renderLevelChips(items, kind) {
     .join("");
 }
 
-function buildChecklistRows(analysis) {
-  const seen = new Set();
-  const rows = [];
-  for (const item of analysis.derivatives_checklist || []) {
-    const key = String(item.name || "")
-      .toLowerCase()
-      .replace(/\s+/g, " ")
-      .trim();
-    if (!key || seen.has(key)) continue;
-    seen.add(key);
-    rows.push(item);
-    if (rows.length >= 6) break;
-  }
-
-  if (!rows.length) {
-    return `<div class="check-empty">چک‌لیست مشتقه در این کارت نیست</div>`;
-  }
-
-  return rows
-    .map(
-      (item) => `
-      <div class="check-row ${toneClass(item.tone)}">
-        <div class="check-name">${escapeHtml(item.name)}</div>
-        <div class="check-value">${escapeHtml(item.value)}</div>
-        <div class="check-result">${escapeHtml(item.result)}</div>
-      </div>`,
-    )
-    .join("");
-}
-
 function buildAnalysisCardHtml(analysis, candles = []) {
   const { date, time } = formatNow();
   const confidence = Number(analysis.confidence) || 0;
@@ -462,7 +432,7 @@ function buildAnalysisCardHtml(analysis, candles = []) {
         <div class="logo">₿</div>
         <div>
           <div class="pair">${escapeHtml(analysis.pair_label || analysis.symbol)}</div>
-          <div class="sub">نقشه راه پژوهشی · تأیید مشتقه 1H</div>
+          <div class="sub">شرح تحلیل پژوهشی</div>
         </div>
       </div>
       <div class="meta-top">${escapeHtml(date)}<br>${escapeHtml(time)}</div>
@@ -495,18 +465,13 @@ function buildAnalysisCardHtml(analysis, candles = []) {
     </div>
 
     <div class="panel">
-      <div class="section-title">تأیید مشتقه (1H)</div>
-      ${buildChecklistRows(analysis)}
+      <div class="section-title">شرح تحلیل پژوهشی</div>
+      <div class="summary">${escapeHtml(summary)}</div>
     </div>
 
     <div class="panel">
       <div class="section-title">نمودار قیمت (1H)</div>
       ${buildCandleSvg(candles, analysis)}
-    </div>
-
-    <div class="panel">
-      <div class="section-title">نقشه راه پژوهشی</div>
-      <div class="summary">${escapeHtml(summary)}</div>
     </div>
 
     <div class="panel">
