@@ -100,7 +100,7 @@ Raw scrape results are saved in `output/*.json`:
 {
   "symbol": "BTCUSDT",
   "datetime": "2026-07-24T10:50:00.000Z",
-  "url": "https://www.coinex.com/futures/BTCUSDT",
+  "url": "https://www.coinex.com/futures/BTC-USDT",
   "text": "CoinEx AI Research Text..."
 }
 ```

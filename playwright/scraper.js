@@ -19,6 +19,19 @@ function normalizeText(text) {
     .trim();
 }
 
+function formatCoinExFuturesSymbol(symbol) {
+  const normalized = symbol.trim().toUpperCase();
+  if (normalized.includes("-")) {
+    return normalized;
+  }
+
+  if (normalized.endsWith("USDT")) {
+    return `${normalized.slice(0, -4)}-USDT`;
+  }
+
+  return normalized;
+}
+
 function trimNonResearchText(text) {
   let cleaned = normalizeText(text);
 
@@ -75,15 +88,41 @@ async function clickAiResearchTab(page, timeoutMs) {
     }
   }
 
-  await page.waitForSelector("text=AI Research", { timeout: timeoutMs });
+  await assertCoinExPageAvailable(page);
+  const bodyText = await page.locator("body").innerText({ timeout: 5000 }).catch(() => "");
+  throw new Error(
+    `AI Research tab not found. Final URL: ${page.url()}. Page text: ${normalizeText(bodyText).slice(0, 300)}`,
+  );
 }
 
 async function waitForResearchContent(page, timeoutMs) {
-  await Promise.race([
+  await Promise.any([
     page.waitForSelector("text=Market News", { timeout: timeoutMs }),
     page.waitForSelector("text=Strategic Analysis", { timeout: timeoutMs }),
     page.waitForSelector("text=Short-Term", { timeout: timeoutMs }),
-  ]);
+  ]).catch(() => {
+    throw new Error("Timed out waiting for AI Research content");
+  });
+}
+
+async function assertCoinExPageAvailable(page) {
+  const bodyText = await page.locator("body").innerText({ timeout: 5000 }).catch(() => "");
+
+  if (/unable to provide services to users in your location/i.test(bodyText)) {
+    throw new Error("CoinEx unavailable for current location or IP address");
+  }
+
+  if (/captcha|verify you are human/i.test(bodyText)) {
+    throw new Error("CoinEx verification challenge detected");
+  }
+}
+
+async function waitForInitialRender(page) {
+  await page
+    .waitForFunction(() => (document.body?.innerText || "").trim().length > 20, null, {
+      timeout: 10000,
+    })
+    .catch(() => {});
 }
 
 async function extractResearchText(page) {
@@ -169,7 +208,8 @@ async function extractResearchText(page) {
 async function scrapeAiResearch(symbol, options = {}) {
   const timeoutMs = options.timeoutMs || config.coinex.scrapeTimeoutMs;
   const headless = options.headless ?? config.runtime.headless;
-  const url = `${config.coinex.baseUrl}/${symbol}`;
+  const coinexSymbol = formatCoinExFuturesSymbol(symbol);
+  const url = `${config.coinex.baseUrl}/${coinexSymbol}`;
   let browser;
 
   try {
@@ -186,6 +226,8 @@ async function scrapeAiResearch(symbol, options = {}) {
     logger.info(`Opening ${url}`, { symbol });
     await page.goto(url, { waitUntil: "domcontentloaded", timeout: timeoutMs });
     await page.waitForLoadState("networkidle", { timeout: timeoutMs }).catch(() => {});
+    await waitForInitialRender(page);
+    await assertCoinExPageAvailable(page);
 
     logger.info("Opening AI Research tab", { symbol });
     await clickAiResearchTab(page, timeoutMs);
