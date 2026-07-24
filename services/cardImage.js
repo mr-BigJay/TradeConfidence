@@ -21,7 +21,8 @@ async function launchBrowser() {
       "--no-zygote",
       "--single-process",
       "--renderer-process-limit=1",
-      "--js-flags=--max-old-space-size=256",
+      "--js-flags=--max-old-space-size=384",
+      "--font-render-hinting=none",
     ],
   });
 }
@@ -48,28 +49,31 @@ async function renderAnalysisCard(analysis) {
     `${analysis.symbol}-card-${new Date().toISOString().replace(/[:.]/g, "-")}.png`,
   );
 
-  const scale = Math.min(Math.max(config.runtime.cardScale || 1, 1), 2);
+  // Default 2 for sharper output; override with CARD_SCALE=1 on very low RAM.
+  const scale = Math.min(Math.max(config.runtime.cardScale || 2, 1), 2);
   let browser;
 
   try {
     browser = await launchBrowser();
     const page = await browser.newPage({
-      viewport: { width: 1400, height: 1100 },
+      viewport: { width: 1480, height: 1180 },
       deviceScaleFactor: scale,
     });
 
-    await page.setContent(html, { waitUntil: "domcontentloaded", timeout: 45000 });
+    await page.emulateMedia({ media: "screen" });
+    await page.setContent(html, { waitUntil: "networkidle", timeout: 60000 });
     await page.evaluate(async () => {
       if (document.fonts?.ready) {
         await document.fonts.ready;
       }
     });
-    await page.waitForTimeout(1200);
+    await page.waitForTimeout(1500);
 
     const card = page.locator("#analysis-card");
     await card.screenshot({
       path: filePath,
       type: "png",
+      animations: "disabled",
     });
 
     logger.info("Analysis card image created", { filePath, scale });

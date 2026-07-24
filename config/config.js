@@ -49,6 +49,6 @@ module.exports = {
     headless: parseBoolean(process.env.HEADLESS, true),
     databasePath: process.env.DATABASE_PATH || "./data/coinex-ai-bot.sqlite",
     logLevel: process.env.LOG_LEVEL || "info",
-    cardScale: parsePositiveInteger(process.env.CARD_SCALE, 1),
+    cardScale: parsePositiveInteger(process.env.CARD_SCALE, 2),
   },
 };
