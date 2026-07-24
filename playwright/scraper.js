@@ -249,10 +249,22 @@ async function scrapeAiResearch(symbol, options = {}) {
 
   try {
     logger.info("Launching Chromium", { symbol });
-    browser = await chromium.launch({ headless });
+    browser = await chromium.launch({
+      headless,
+      timeout: 60000,
+      args: [
+        "--no-sandbox",
+        "--disable-setuid-sandbox",
+        "--disable-dev-shm-usage",
+        "--disable-gpu",
+        "--disable-software-rasterizer",
+      ],
+    });
     const page = await browser.newPage({
       viewport: { width: 1440, height: 1000 },
       locale: "en-US",
+      userAgent:
+        "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
     });
 
     page.setDefaultTimeout(timeoutMs);
