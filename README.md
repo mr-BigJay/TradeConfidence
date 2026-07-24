@@ -51,11 +51,16 @@ npx playwright install chromium
 cp .env.example .env
 ```
 
-Fill `.env`:
+Fill `.env`.
+
+For ArvanCloud AIaaS (recommended in Iran):
 
 ```env
-OPENAI_API_KEY=
-OPENAI_MODEL=gpt-4o
+OPENAI_API_KEY=apikey_value_without_prefix
+OPENAI_MODEL=GPT-4.1-Mini
+OPENAI_BASE_URL=https://arvancloud.ai.ir/gateway/models/GPT-4.1-Mini/YOUR_ENDPOINT_ID
+OPENAI_AUTH_SCHEME=apikey
+OPENAI_JSON_MODE=false
 
 TELEGRAM_BOT_TOKEN=
 TELEGRAM_CHAT_ID=
@@ -63,10 +68,10 @@ TELEGRAM_CHAT_ID=
 CHECK_INTERVAL_MINUTES=30
 COINEX_SYMBOLS=BTCUSDT
 HEADLESS=true
-SCRAPE_TIMEOUT_MS=30000
-DATABASE_PATH=./data/coinex-ai-bot.sqlite
-LOG_LEVEL=info
 ```
+
+`OPENAI_BASE_URL` must be the Endpoint from Arvan panel, without `/chat/completions`.
+`OPENAI_API_KEY` must be the Machine User key (only the token part).
 
 ## Ubuntu 24 VPS setup (Germany / EU recommended)
 

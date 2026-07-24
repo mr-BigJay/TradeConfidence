@@ -18,6 +18,13 @@ const symbols = (process.env.COINEX_SYMBOLS || "BTCUSDT")
   .map((symbol) => symbol.trim().toUpperCase())
   .filter(Boolean);
 
+const authScheme = (process.env.OPENAI_AUTH_SCHEME || "bearer").toLowerCase();
+const baseURL = (process.env.OPENAI_BASE_URL || "").replace(/\/$/, "");
+const jsonMode = parseBoolean(
+  process.env.OPENAI_JSON_MODE,
+  authScheme === "bearer" && !baseURL,
+);
+
 module.exports = {
   coinex: {
     baseUrl: "https://www.coinex.com/futures",
@@ -29,7 +36,10 @@ module.exports = {
   },
   openai: {
     apiKey: process.env.OPENAI_API_KEY,
-    model: process.env.OPENAI_MODEL || "gpt-4o",
+    model: process.env.OPENAI_MODEL || "gpt-4o-mini",
+    baseURL: baseURL || undefined,
+    authScheme,
+    jsonMode,
   },
   telegram: {
     botToken: process.env.TELEGRAM_BOT_TOKEN,

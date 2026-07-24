@@ -6,13 +6,35 @@ const config = require("../config/config");
 let client;
 let promptTemplate;
 
+function normalizeApiKey(apiKey) {
+  return String(apiKey || "")
+    .trim()
+    .replace(/^apikey\s+/i, "");
+}
+
 function getClient() {
-  if (!config.openai.apiKey) {
+  const apiKey = normalizeApiKey(config.openai.apiKey);
+  if (!apiKey) {
     throw new Error("OPENAI_API_KEY is missing");
   }
 
   if (!client) {
-    client = new OpenAI({ apiKey: config.openai.apiKey });
+    const options = {
+      apiKey,
+    };
+
+    if (config.openai.baseURL) {
+      options.baseURL = config.openai.baseURL;
+    }
+
+    // ArvanCloud expects: Authorization: apikey <token>
+    if (config.openai.authScheme === "apikey") {
+      options.defaultHeaders = {
+        Authorization: `apikey ${apiKey}`,
+      };
+    }
+
+    client = new OpenAI(options);
   }
 
   return client;
@@ -68,9 +90,8 @@ async function analyzeAiResearch({ symbol, text }) {
   const prompt = template.replace("{{AI_RESEARCH_TEXT}}", text);
   const openai = getClient();
 
-  const response = await openai.chat.completions.create({
+  const request = {
     model: config.openai.model,
-    response_format: { type: "json_object" },
     messages: [
       {
         role: "system",
@@ -82,8 +103,13 @@ async function analyzeAiResearch({ symbol, text }) {
         content: prompt,
       },
     ],
-  });
+  };
 
+  if (config.openai.jsonMode) {
+    request.response_format = { type: "json_object" };
+  }
+
+  const response = await openai.chat.completions.create(request);
   const content = response.choices?.[0]?.message?.content;
   if (!content) {
     throw new Error("OpenAI returned an empty response");
