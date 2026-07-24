@@ -137,6 +137,16 @@ The default schedule checks BTC every 30 minutes. If the extracted AI Research
 text has not changed since the previous successful scrape, OpenAI and Telegram
 are skipped to avoid duplicate messages and unnecessary API cost.
 
+Force a full run even if the text is unchanged:
+
+```bash
+npm run run:force
+```
+
+Each successful analysis also renders a Persian dashboard card image and sends it
+to Telegram via `sendPhoto`, with a short text caption. If image rendering fails,
+the bot falls back to text-only Telegram delivery.
+
 ## Output
 
 Raw scrape results are saved in `output/*.json`:

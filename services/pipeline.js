@@ -11,6 +11,7 @@ const {
 const logger = require("../logger");
 const { scrapeAiResearch } = require("../playwright/scraper");
 const { analyzeAiResearch } = require("./openai");
+const { renderAnalysisCard } = require("./cardImage");
 const { sendMarketStatus } = require("./telegram");
 
 function hashText(text) {
@@ -60,7 +61,7 @@ async function processSymbol(symbol, options = {}) {
     const textHash = hashText(scrapeResult.text);
     const latestContent = await getLatestContent(symbol);
 
-    if (latestContent?.text_hash === textHash) {
+    if (!options.force && latestContent?.text_hash === textHash) {
       logger.info("AI Research unchanged, skipping OpenAI and Telegram", { symbol });
       await saveEvent({ symbol, event: "no_change", message: "AI Research text has not changed" });
       result.ok = true;
@@ -90,12 +91,30 @@ async function processSymbol(symbol, options = {}) {
       createdAt: new Date().toISOString(),
     });
 
-    await sendMarketStatus(analysis);
-    logger.info("Telegram success", { symbol });
-    await saveEvent({ symbol, event: "telegram_success", message: "Telegram message sent" });
+    let imagePath = null;
+    try {
+      imagePath = await renderAnalysisCard(analysis);
+      logger.info("Card image success", { symbol, imagePath });
+      await saveEvent({ symbol, event: "card_success", message: imagePath });
+    } catch (error) {
+      logger.error("Card image failed, falling back to text-only Telegram", {
+        symbol,
+        error: error.message,
+      });
+      await saveEvent({ symbol, event: "card_error", message: error.message });
+    }
+
+    await sendMarketStatus(analysis, imagePath);
+    logger.info("Telegram success", { symbol, hasImage: Boolean(imagePath) });
+    await saveEvent({
+      symbol,
+      event: "telegram_success",
+      message: imagePath ? `Telegram photo sent: ${imagePath}` : "Telegram text sent",
+    });
 
     result.ok = true;
     result.analysis = analysis;
+    result.imagePath = imagePath;
     return result;
   } catch (error) {
     logger.error("Symbol processing failed", {

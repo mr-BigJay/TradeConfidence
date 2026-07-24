@@ -41,6 +41,7 @@ process.on("SIGTERM", () => shutdown("SIGTERM"));
 async function main() {
   const options = {
     scrapeOnly: args.has("--scrape-only"),
+    force: args.has("--force"),
   };
 
   if (args.has("--once")) {

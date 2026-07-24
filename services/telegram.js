@@ -1,3 +1,5 @@
+const fs = require("node:fs");
+const path = require("node:path");
 const config = require("../config/config");
 
 function requireTelegramConfig() {
@@ -22,7 +24,6 @@ function formatMarketStatusMessage(analysis) {
   return [
     `📊 ${analysis.symbol} — تحلیل وضعیت بازار`,
     "",
-    `روند: ${analysis.trend}`,
     `بایاس: ${analysis.bias}`,
     `اعتماد تحلیل: ${analysis.confidence}%`,
     "",
@@ -32,24 +33,6 @@ function formatMarketStatusMessage(analysis) {
     `مقاومت‌ها: ${formatList(analysis.key_resistance)}`,
     `حمایت‌ها: ${formatList(analysis.key_support)}`,
     `محدوده فعلی: ${analysis.current_range}`,
-    "",
-    "سناریوی صعودی:",
-    analysis.bullish_scenario || "نامشخص",
-    "",
-    "سناریوی خنثی / نوسانی:",
-    analysis.neutral_scenario || "نامشخص",
-    "",
-    "سناریوی نزولی:",
-    analysis.bearish_scenario || "نامشخص",
-    "",
-    "استراتژی کوتاه‌مدت:",
-    analysis.short_term_strategy || "نامشخص",
-    "",
-    "استراتژی بلندمدت:",
-    analysis.long_term_strategy || "نامشخص",
-    "",
-    `ریسک: ${analysis.risk_level}`,
-    `نکات ریسک: ${analysis.risk_notes || "نامشخص"}`,
     "",
     "جمع‌بندی:",
     analysis.summary || "نامشخص",
@@ -82,12 +65,49 @@ async function sendTelegramMessage(text) {
   return payload;
 }
 
-async function sendMarketStatus(analysis) {
-  return sendTelegramMessage(formatMarketStatusMessage(analysis));
+async function sendTelegramPhoto(imagePath, caption) {
+  requireTelegramConfig();
+
+  const absolutePath = path.resolve(imagePath);
+  if (!fs.existsSync(absolutePath)) {
+    throw new Error(`Telegram photo not found: ${absolutePath}`);
+  }
+
+  const form = new FormData();
+  form.append("chat_id", String(config.telegram.chatId));
+  form.append("caption", caption.slice(0, 1000));
+  form.append("disable_notification", "false");
+
+  const blob = new Blob([fs.readFileSync(absolutePath)], { type: "image/png" });
+  form.append("photo", blob, path.basename(absolutePath));
+
+  const url = `https://api.telegram.org/bot${config.telegram.botToken}/sendPhoto`;
+  const response = await fetch(url, {
+    method: "POST",
+    body: form,
+  });
+
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok || payload.ok === false) {
+    throw new Error(`Telegram photo error: ${payload.description || response.statusText}`);
+  }
+
+  return payload;
+}
+
+async function sendMarketStatus(analysis, imagePath = null) {
+  const caption = formatMarketStatusMessage(analysis);
+
+  if (imagePath) {
+    return sendTelegramPhoto(imagePath, caption);
+  }
+
+  return sendTelegramMessage(caption);
 }
 
 module.exports = {
   formatMarketStatusMessage,
   sendMarketStatus,
   sendTelegramMessage,
+  sendTelegramPhoto,
 };
