@@ -240,6 +240,31 @@ async function extractResearchText(page) {
   return researchText;
 }
 
+async function launchBrowser(headless) {
+  const resolvedHeadless = process.env.DISPLAY ? headless : true;
+
+  logger.info("Chromium launch config", {
+    requestedHeadless: headless,
+    resolvedHeadless,
+    hasDisplay: Boolean(process.env.DISPLAY),
+  });
+
+  const browser = await chromium.launch({
+    headless: resolvedHeadless,
+    timeout: 60000,
+    args: [
+      "--no-sandbox",
+      "--disable-setuid-sandbox",
+      "--disable-dev-shm-usage",
+      "--disable-gpu",
+      "--disable-software-rasterizer",
+    ],
+  });
+
+  logger.info("Chromium launched successfully");
+  return browser;
+}
+
 async function scrapeAiResearch(symbol, options = {}) {
   const timeoutMs = options.timeoutMs || config.coinex.scrapeTimeoutMs;
   const headless = options.headless ?? config.runtime.headless;
@@ -249,23 +274,16 @@ async function scrapeAiResearch(symbol, options = {}) {
 
   try {
     logger.info("Launching Chromium", { symbol });
-    browser = await chromium.launch({
-      headless,
-      timeout: 60000,
-      args: [
-        "--no-sandbox",
-        "--disable-setuid-sandbox",
-        "--disable-dev-shm-usage",
-        "--disable-gpu",
-        "--disable-software-rasterizer",
-      ],
-    });
+    browser = await launchBrowser(headless);
+
+    logger.info("Creating browser page", { symbol });
     const page = await browser.newPage({
       viewport: { width: 1440, height: 1000 },
       locale: "en-US",
       userAgent:
         "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
     });
+    logger.info("Browser page created", { symbol });
 
     page.setDefaultTimeout(timeoutMs);
     page.setDefaultNavigationTimeout(timeoutMs);
