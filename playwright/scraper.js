@@ -1,3 +1,5 @@
+const fs = require("node:fs");
+const path = require("node:path");
 const { chromium } = require("playwright");
 const config = require("../config/config");
 const logger = require("../logger");
@@ -240,29 +242,55 @@ async function extractResearchText(page) {
   return researchText;
 }
 
-async function launchBrowser(headless) {
+function withTimeout(promise, timeoutMs, message) {
+  let timer;
+  return Promise.race([
+    promise.finally(() => clearTimeout(timer)),
+    new Promise((_, reject) => {
+      timer = setTimeout(() => reject(new Error(message)), timeoutMs);
+    }),
+  ]);
+}
+
+async function launchBrowserContext(headless) {
   const resolvedHeadless = process.env.DISPLAY ? headless : true;
+  const userDataDir = path.join("data", "chromium-profile");
+  fs.mkdirSync(userDataDir, { recursive: true });
 
   logger.info("Chromium launch config", {
     requestedHeadless: headless,
     resolvedHeadless,
     hasDisplay: Boolean(process.env.DISPLAY),
+    userDataDir,
   });
 
-  const browser = await chromium.launch({
+  const context = await chromium.launchPersistentContext(userDataDir, {
     headless: resolvedHeadless,
     timeout: 60000,
+    viewport: { width: 1440, height: 1000 },
+    locale: "en-US",
+    userAgent:
+      "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+    ignoreHTTPSErrors: true,
     args: [
       "--no-sandbox",
       "--disable-setuid-sandbox",
       "--disable-dev-shm-usage",
       "--disable-gpu",
       "--disable-software-rasterizer",
+      "--no-zygote",
+      "--disable-extensions",
+      "--disable-background-networking",
+      "--disable-default-apps",
+      "--disable-sync",
+      "--disable-translate",
+      "--mute-audio",
+      "--no-first-run",
     ],
   });
 
-  logger.info("Chromium launched successfully");
-  return browser;
+  logger.info("Chromium context launched successfully");
+  return context;
 }
 
 async function scrapeAiResearch(symbol, options = {}) {
@@ -270,20 +298,21 @@ async function scrapeAiResearch(symbol, options = {}) {
   const headless = options.headless ?? config.runtime.headless;
   const coinexSymbol = formatCoinExFuturesSymbol(symbol);
   const url = `${config.coinex.baseUrl}/${coinexSymbol}`;
-  let browser;
+  let context;
 
   try {
     logger.info("Launching Chromium", { symbol });
-    browser = await launchBrowser(headless);
+    context = await launchBrowserContext(headless);
 
     logger.info("Creating browser page", { symbol });
-    const page = await browser.newPage({
-      viewport: { width: 1440, height: 1000 },
-      locale: "en-US",
-      userAgent:
-        "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
-    });
-    logger.info("Browser page created", { symbol });
+    const page =
+      context.pages()[0] ||
+      (await withTimeout(
+        context.newPage(),
+        30000,
+        "Timed out while creating browser page",
+      ));
+    logger.info("Browser page ready", { symbol, pages: context.pages().length });
 
     page.setDefaultTimeout(timeoutMs);
     page.setDefaultNavigationTimeout(timeoutMs);
@@ -308,8 +337,8 @@ async function scrapeAiResearch(symbol, options = {}) {
       text,
     };
   } finally {
-    if (browser) {
-      await browser.close();
+    if (context) {
+      await context.close();
     }
   }
 }

@@ -4,5 +4,6 @@ logs/*.log
 output/*.json
 data/*.sqlite
 data/*.sqlite-*
+data/chromium-profile/
 ms-playwright/
 .DS_Store
