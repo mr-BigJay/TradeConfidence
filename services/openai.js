@@ -61,9 +61,33 @@ function parseJsonContent(content) {
   }
 }
 
-async function analyzeAiResearch({ symbol, text }) {
+function buildPreviousSnapshot(previousAnalysis) {
+  if (!previousAnalysis || typeof previousAnalysis !== "object") {
+    return "No previous report available.";
+  }
+
+  const snapshot = {
+    bias: previousAnalysis.bias,
+    confidence: previousAnalysis.confidence,
+    market_summary: previousAnalysis.market_summary || previousAnalysis.summary,
+    short_term_trend: previousAnalysis.short_term_trend,
+    long_term_trend: previousAnalysis.long_term_trend,
+    key_support: previousAnalysis.key_support,
+    key_resistance: previousAnalysis.key_resistance,
+    bullish_scenario_probability: previousAnalysis.bullish_scenario_probability,
+    bearish_scenario_probability: previousAnalysis.bearish_scenario_probability,
+    final_verdict: previousAnalysis.final_verdict,
+  };
+
+  return JSON.stringify(snapshot, null, 2);
+}
+
+async function analyzeAiResearch({ symbol, text, previousAnalysis = null }) {
   const template = await getPromptTemplate();
-  const prompt = template.replace("{{AI_RESEARCH_TEXT}}", text || "");
+  const prompt = template
+    .replace("{{PREVIOUS_ANALYSIS}}", buildPreviousSnapshot(previousAnalysis))
+    .replace("{{AI_RESEARCH_TEXT}}", text || "");
+
   const openai = getClient();
 
   const request = {
@@ -72,7 +96,7 @@ async function analyzeAiResearch({ symbol, text }) {
       {
         role: "system",
         content:
-          "You produce strict JSON for Persian crypto market status. Explain only the provided AI Research text as the roadmap. Write clean formal Persian with no typos. Never mention CoinEx, Bitunix, Coinglass, کوینکس, or بیتونیکس. Keep text compact for one Telegram message. Never give direct buy/sell orders. Always include long_confirm and short_confirm.",
+          "You produce strict JSON for a deep Persian crypto desk report based only on the provided AI Research text. Write clean formal Persian. Never mention CoinEx/Bitunix/Coinglass or Persian brand variants. Never give direct buy/sell orders. Always include long_confirm, short_confirm, and trading_suggestion as risk-management stance.",
       },
       {
         role: "user",

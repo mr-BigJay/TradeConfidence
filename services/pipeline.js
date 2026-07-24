@@ -2,6 +2,7 @@ const fs = require("node:fs/promises");
 const path = require("node:path");
 const config = require("../config/config");
 const {
+  getLatestAnalysis,
   getLatestContent,
   saveAnalysis,
   saveContent,
@@ -88,6 +89,8 @@ async function processSymbol(symbol, options = {}) {
       logger.warn("Force mode enabled: regenerating even if AI Research is unchanged", { symbol });
     }
 
+    const previousAnalysisRow = await getLatestAnalysis(symbol);
+
     await saveContent({
       symbol,
       textHash: fingerprint.contentHash,
@@ -99,8 +102,9 @@ async function processSymbol(symbol, options = {}) {
     const analysis = await analyzeAiResearch({
       symbol,
       text: scrapeResult.text,
+      previousAnalysis: previousAnalysisRow?.analysis || null,
     });
-    logger.info("GPT success", { symbol });
+    logger.info("GPT success", { symbol, hasPrevious: Boolean(previousAnalysisRow) });
     await saveEvent({ symbol, event: "gpt_success", message: "OpenAI analysis created" });
 
     await saveAnalysis({

@@ -175,7 +175,7 @@ function buildAnalysisCardHtml(analysis, candles = []) {
       : "-";
 
   const summary =
-    analysis.market_summary || analysis.summary || analysis.final_verdict || "در حال آماده‌سازی";
+    analysis.summary || analysis.market_summary || analysis.final_verdict || "در حال آماده‌سازی";
   const longConfirm = analysis.long_confirm || {};
   const shortConfirm = analysis.short_confirm || {};
   const longHow = (longConfirm.how || [])

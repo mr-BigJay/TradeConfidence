@@ -2,7 +2,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const config = require("../config/config");
 
-const TELEGRAM_SINGLE_MESSAGE_LIMIT = 3500;
+const TELEGRAM_MESSAGE_LIMIT = 3900;
 
 function requireTelegramConfig() {
   if (!config.telegram.botToken) {
@@ -14,93 +14,182 @@ function requireTelegramConfig() {
   }
 }
 
+function toneEmoji(tone) {
+  if (tone === "bullish") return "🟢";
+  if (tone === "bearish") return "🔴";
+  return "🟠";
+}
+
 function joinLines(items, bullet = "•") {
   return (items || []).map((item) => `${bullet} ${item}`).join("\n");
 }
 
-function clip(text, max) {
-  const value = String(text || "").trim();
-  if (value.length <= max) return value;
-  return `${value.slice(0, Math.max(0, max - 1)).trim()}…`;
+function formatDateFa(date = new Date()) {
+  try {
+    return new Intl.DateTimeFormat("fa-IR", {
+      dateStyle: "long",
+      timeStyle: "short",
+      timeZone: "UTC",
+    }).format(date);
+  } catch (error) {
+    return date.toISOString().replace("T", " ").slice(0, 16) + " UTC";
+  }
 }
 
 /**
- * One compact Telegram message explaining the research roadmap only.
- * Never mention exchange brand names in user-facing text.
+ * Deep desk-style Persian report matching the user's preferred ChatGPT format.
  */
 function formatDeepAnalysisMessage(analysis) {
-  const battlePoints = joinLines((analysis.market_battle_points || []).slice(0, 3), "•");
-  const supports = (analysis.key_support || []).slice(0, 3).join(" | ") || "نامشخص";
-  const resistances = (analysis.key_resistance || []).slice(0, 3).join(" | ") || "نامشخص";
+  const fundamentals = (analysis.fundamentals || [])
+    .map(
+      (item) =>
+        `${toneEmoji(item.tone)} ${item.title}\n${item.text}${
+          item.weight ? `\nوزن: ${item.weight}` : ""
+        }`,
+    )
+    .join("\n\n");
 
-  const roadmap = clip(
-    analysis.market_summary || analysis.summary || analysis.final_verdict || "نامشخص",
-    520,
-  );
-  const verdict = clip(analysis.final_verdict || analysis.summary || "نامشخص", 300);
+  const longWarnings = joinLines(analysis.technical_long_term?.warnings || [], "❌");
+  const longPositives = joinLines(analysis.technical_long_term?.positives || [], "✅");
+  const shortPoints = joinLines(analysis.technical_short_term?.points || [], "•");
+  const battlePoints = joinLines(analysis.market_battle_points || [], "•");
+  const comparison = joinLines(analysis.previous_report_comparison || [], "•");
+  const indicators = (analysis.indicators || [])
+    .map((item) => `${toneEmoji(item.tone)} ${item.name}: ${item.status}`)
+    .join("\n");
 
   const longConfirm = analysis.long_confirm || {};
   const shortConfirm = analysis.short_confirm || {};
   const longHow = joinLines((longConfirm.how || []).slice(0, 3), "•");
   const shortHow = joinLines((shortConfirm.how || []).slice(0, 3), "•");
 
-  const scoreLine =
-    analysis.long_score !== null && analysis.long_score !== undefined
-      ? `لانگ ${analysis.long_score}/10 | شورت ${analysis.short_score ?? "-"}/10`
-      : null;
+  const supports = joinLines(analysis.key_support || [], "🟢") || "نامشخص";
+  const resistances = joinLines(analysis.key_resistance || [], "🔴") || "نامشخص";
 
-  const message = [
-    `${analysis.pair_label || analysis.symbol} — وضعیت بازار`,
+  return [
+    `# ${analysis.title || "تحلیل اختصاصی BTC"}`,
+    "",
+    `تاریخ: ${formatDateFa()}`,
     `بایاس: ${analysis.bias || "خنثی"} | اطمینان: ${analysis.confidence || 0}% | قیمت: ${analysis.current_price || "-"}`,
-    scoreLine || "",
-    "",
-    "شرح تحلیل پژوهشی",
-    roadmap,
-    battlePoints ? `\nنکات کلیدی:\n${battlePoints}` : "",
-    "",
-    "سطوح",
-    `حمایت: ${supports}`,
-    `مقاومت: ${resistances}`,
-    analysis.current_range ? `محدوده: ${analysis.current_range}` : "",
-    "",
-    "سناریو",
-    `🟢 صعودی ${analysis.bullish_scenario_probability || 0}% — ${clip(analysis.bullish_scenario, 180)}`,
-    Number(analysis.neutral_scenario_probability) > 0
-      ? `🟠 خنثی ${analysis.neutral_scenario_probability}% — ${clip(analysis.neutral_scenario, 120)}`
+    analysis.long_score !== null && analysis.long_score !== undefined
+      ? `امتیاز لانگ: ${analysis.long_score}/10 | امتیاز شورت: ${analysis.short_score ?? "-"}/10`
       : "",
-    `🔴 نزولی ${analysis.bearish_scenario_probability || 0}% — ${clip(analysis.bearish_scenario, 180)}`,
     "",
-    "تأیید لانگ",
-    `کجا: ${clip(longConfirm.zone, 120)}`,
+    "# خلاصه بازار",
+    analysis.market_summary || analysis.summary || "نامشخص",
+    battlePoints ? `\nنبرد اصلی بازار:\n${battlePoints}` : "",
+    "",
+    "# تحلیل فاندامنتال",
+    fundamentals || "داده‌ای در گزارش پژوهشی نبود",
+    "",
+    "# تحلیل تکنیکال",
+    "",
+    "## روند بلندمدت",
+    `وضعیت: ${analysis.technical_long_term?.bias || analysis.long_term_trend || "نامشخص"}`,
+    analysis.technical_long_term?.text || "",
+    longPositives ? `\nنکات مثبت:\n${longPositives}` : "",
+    longWarnings ? `\nهشدارها:\n${longWarnings}` : "",
+    "",
+    "## روند کوتاه‌مدت",
+    `وضعیت: ${analysis.technical_short_term?.bias || analysis.short_term_trend || "نامشخص"}`,
+    analysis.technical_short_term?.text || "",
+    shortPoints ? `\n${shortPoints}` : "",
+    "",
+    "# سطوح مهم بازار",
+    "",
+    "## حمایت‌ها",
+    supports,
+    "",
+    "## مقاومت‌ها",
+    resistances,
+    analysis.current_range ? `\nمحدوده فعلی: ${analysis.current_range}` : "",
+    "",
+    "# سناریوهای احتمالی",
+    "",
+    `## 🔴 سناریوی نزولی (${analysis.bearish_scenario_probability || 0}%)`,
+    analysis.bearish_scenario || "نامشخص",
+    analysis.bearish_targets?.length ? `اهداف: ${analysis.bearish_targets.join(" | ")}` : "",
+    "",
+    Number(analysis.neutral_scenario_probability) > 0
+      ? `## 🟠 سناریوی خنثی (${analysis.neutral_scenario_probability}%)\n${analysis.neutral_scenario || "نامشخص"}\n`
+      : "",
+    `## 🟢 سناریوی صعودی (${analysis.bullish_scenario_probability || 0}%)`,
+    analysis.bullish_scenario || "نامشخص",
+    analysis.bullish_targets?.length ? `اهداف: ${analysis.bullish_targets.join(" | ")}` : "",
+    "",
+    "# ارزیابی اندیکاتورها",
+    indicators || "نامشخص",
+    "",
+    comparison ? `# مقایسه با گزارش قبلی\n${comparison}\n` : "",
+    "# تأیید سناریوها",
+    "",
+    "## لانگ",
+    `کجا: ${longConfirm.zone || "نامشخص"}`,
     longHow || "",
-    longConfirm.invalidation ? `باطل: ${clip(longConfirm.invalidation, 100)}` : "",
+    longConfirm.invalidation ? `باطل‌کننده: ${longConfirm.invalidation}` : "",
     "",
-    "تأیید شورت",
-    `کجا: ${clip(shortConfirm.zone, 120)}`,
+    "## شورت",
+    `کجا: ${shortConfirm.zone || "نامشخص"}`,
     shortHow || "",
-    shortConfirm.invalidation ? `باطل: ${clip(shortConfirm.invalidation, 100)}` : "",
+    shortConfirm.invalidation ? `باطل‌کننده: ${shortConfirm.invalidation}` : "",
     "",
-    "جمع‌بندی",
-    verdict,
+    "# جمع‌بندی نهایی",
+    analysis.final_verdict || analysis.summary || "نامشخص",
     "",
-    "⚠️ دستور ورود نیست؛ فقط شرح وضعیت و شرایط تأیید سناریو.",
+    "**نتیجه:**",
+    `• روند بلندمدت: ${analysis.long_term_trend || "نامشخص"}`,
+    `• روند کوتاه‌مدت: ${analysis.short_term_trend || "نامشخص"}`,
+    `• احتمال سناریوی نزولی: ${analysis.bearish_probability || analysis.bearish_scenario_probability || 0}%`,
+    `• احتمال سناریوی صعودی: ${analysis.bullish_probability || analysis.bullish_scenario_probability || 0}%`,
+    analysis.correction_probability
+      ? `• احتمال ادامه اصلاح: ${analysis.correction_probability}%`
+      : "",
+    "",
+    "# پیشنهاد مدیریت ریسک",
+    analysis.trading_suggestion || analysis.short_term_strategy || "نامشخص",
+    "",
+    "⚠️ این گزارش سیگنال خرید/فروش قطعی نیست و فقط شرح وضعیت بازار است.",
   ]
     .filter((line) => line !== "")
     .join("\n");
-
-  return clip(message, TELEGRAM_SINGLE_MESSAGE_LIMIT);
 }
 
 function formatCardCaption(analysis) {
-  const score =
-    analysis.long_score !== null && analysis.long_score !== undefined
-      ? ` | L${analysis.long_score}/S${analysis.short_score ?? "-"}`
-      : "";
+  return [
+    `${analysis.pair_label || analysis.symbol} | ${analysis.bias || "خنثی"} | ${analysis.confidence || 0}%`,
+    `محدوده: ${analysis.current_range || "نامشخص"}`,
+  ].join("\n");
+}
 
-  return clip(
-    `${analysis.pair_label || analysis.symbol} | ${analysis.bias || "خنثی"} | ${analysis.confidence || 0}%${score}`,
-    200,
-  );
+function splitTelegramText(text, maxLength = TELEGRAM_MESSAGE_LIMIT) {
+  if (text.length <= maxLength) {
+    return [text];
+  }
+
+  const chunks = [];
+  let remaining = text;
+
+  while (remaining.length > maxLength) {
+    let cut = remaining.lastIndexOf("\n# ", maxLength);
+    if (cut < maxLength * 0.4) {
+      cut = remaining.lastIndexOf("\n\n", maxLength);
+    }
+    if (cut < maxLength * 0.4) {
+      cut = remaining.lastIndexOf("\n", maxLength);
+    }
+    if (cut < maxLength * 0.4) {
+      cut = maxLength;
+    }
+
+    chunks.push(remaining.slice(0, cut).trim());
+    remaining = remaining.slice(cut).trim();
+  }
+
+  if (remaining) {
+    chunks.push(remaining);
+  }
+
+  return chunks;
 }
 
 async function sendTelegramMessage(text) {
@@ -157,13 +246,16 @@ async function sendTelegramPhoto(imagePath, caption) {
 }
 
 async function sendMarketStatus(analysis, imagePath = null) {
-  const report = formatDeepAnalysisMessage(analysis);
+  const deepReport = formatDeepAnalysisMessage(analysis);
 
   if (imagePath) {
     await sendTelegramPhoto(imagePath, formatCardCaption(analysis));
   }
 
-  await sendTelegramMessage(report);
+  // Deep desk report may need 1-2 Telegram messages; split on section headers only.
+  for (const chunk of splitTelegramText(deepReport)) {
+    await sendTelegramMessage(chunk);
+  }
 }
 
 module.exports = {

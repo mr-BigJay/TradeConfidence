@@ -270,6 +270,8 @@ function normalizeAnalysis(symbol, analysis) {
     long_confirm: asConfirmBlock(clean.long_confirm, "منطقه تأیید لانگ مشخص نشده"),
     short_confirm: asConfirmBlock(clean.short_confirm, "منطقه تأیید شورت مشخص نشده"),
     confirmation_watch: uniqueStrings(clean.confirmation_watch, 4),
+    previous_report_comparison: uniqueStrings(clean.previous_report_comparison, 5),
+    trading_suggestion: clean.trading_suggestion || clean.short_term_strategy || "",
     fundamentals: asFundamentals(clean.fundamentals),
     technical_long_term: {
       bias: technicalLong.bias || clean.long_term_trend || "نامشخص",

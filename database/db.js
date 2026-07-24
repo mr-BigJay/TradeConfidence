@@ -98,6 +98,27 @@ async function saveAnalysis({ symbol, textHash, analysis, createdAt }) {
   );
 }
 
+async function getLatestAnalysis(symbol) {
+  const database = await getDb();
+  const row = await database.get(
+    "SELECT * FROM analysis_results WHERE symbol = ? ORDER BY created_at DESC, id DESC LIMIT 1",
+    symbol,
+  );
+
+  if (!row) {
+    return null;
+  }
+
+  try {
+    return {
+      ...row,
+      analysis: JSON.parse(row.analysis_json),
+    };
+  } catch (error) {
+    return row;
+  }
+}
+
 async function saveEvent({ symbol = null, event, message = null, createdAt = new Date().toISOString() }) {
   const database = await getDb();
 
@@ -122,6 +143,7 @@ async function closeDb() {
 module.exports = {
   closeDb,
   getDb,
+  getLatestAnalysis,
   getLatestContent,
   saveAnalysis,
   saveContent,
