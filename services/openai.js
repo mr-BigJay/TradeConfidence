@@ -96,7 +96,7 @@ async function analyzeAiResearch({ symbol, text, previousAnalysis = null }) {
       {
         role: "system",
         content:
-          "You produce strict JSON for a clear practical Persian market analysis that reads as original work. Use the research text as hidden factual base, but explain enough so a normal user understands the situation and what to do next. Never mention CoinEx/Bitunix/Coinglass or phrases like گزارش پژوهشی / مبتنی بر گزارش / برگرفته از. Never invent levels absent from the source. Never give direct buy/sell orders. End with simple long_confirm and short_confirm.",
+          "تو یک تحلیل‌گر حرفه‌ای بازار رمزارز هستی. خروجی فقط JSON معتبر باشد. تحلیل را عمیق و شبیه میز معاملاتی بنویس. از نسبت دادن متن به گزارش پژوهشی یا منبع خارجی خودداری کن و هرگز CoinEx/Bitunix/Coinglass یا عباراتی مثل گزارش پژوهشی / مبتنی بر گزارش / برگرفته از / طبق گزارش را ننویس. سطوح غایب در منبع را اختراع نکن. سیگنال مستقیم خرید/فروش نده و trading_action را همیشه NO_SIGNAL بگذار. long_confirm و short_confirm را هم پر کن.",
       },
       {
         role: "user",
