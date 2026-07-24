@@ -205,7 +205,17 @@ function buildAnalysisCardHtml(analysis, candles = []) {
       : "-";
 
   const summary =
-    analysis.summary || analysis.market_summary || analysis.final_verdict || "در حال آماده‌سازی";
+    analysis.market_summary || analysis.summary || analysis.final_verdict || "در حال آماده‌سازی";
+  const longConfirm = analysis.long_confirm || {};
+  const shortConfirm = analysis.short_confirm || {};
+  const longHow = (longConfirm.how || [])
+    .slice(0, 5)
+    .map((item) => `<li>${escapeHtml(item)}</li>`)
+    .join("");
+  const shortHow = (shortConfirm.how || [])
+    .slice(0, 5)
+    .map((item) => `<li>${escapeHtml(item)}</li>`)
+    .join("");
 
   return `<!DOCTYPE html>
 <html lang="fa" dir="rtl">
@@ -388,7 +398,50 @@ function buildAnalysisCardHtml(analysis, candles = []) {
       line-height: 1.6;
       font-weight: 600;
     }
-    .fill { flex: 1; }
+    .confirm-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+    .confirm {
+      border-radius: 18px;
+      padding: 16px;
+      background: #111827;
+      border: 1px solid rgba(148,163,184,.12);
+      border-inline-start: 5px solid #64748b;
+    }
+    .confirm.long { border-inline-start-color: #22c55e; background: rgba(34,197,94,.06); }
+    .confirm.short { border-inline-start-color: #ef4444; background: rgba(239,68,68,.06); }
+    .confirm h3 {
+      margin: 0 0 10px;
+      font-size: 18px;
+      font-weight: 800;
+    }
+    .confirm.long h3 { color: #4ade80; }
+    .confirm.short h3 { color: #f87171; }
+    .confirm .zone {
+      font-size: 16px;
+      font-weight: 700;
+      color: #e2e8f0;
+      margin-bottom: 10px;
+      line-height: 1.55;
+    }
+    .confirm ul {
+      margin: 0;
+      padding: 0 18px 0 0;
+      color: #cbd5e1;
+      font-size: 15px;
+      line-height: 1.65;
+      font-weight: 600;
+    }
+    .confirm .inv {
+      margin-top: 10px;
+      color: #fbbf24;
+      font-size: 14px;
+      font-weight: 700;
+      line-height: 1.5;
+    }
+    .fill { flex: 1; min-height: 8px; }
     .disclaimer {
       border-radius: 14px;
       padding: 14px 16px;
@@ -493,9 +546,35 @@ function buildAnalysisCardHtml(analysis, candles = []) {
       </div>
     </div>
 
+    <div class="panel">
+      <div class="section-title">تأییدیه ورود سناریو (کجا و چطور)</div>
+      <div class="confirm-grid">
+        <div class="confirm long">
+          <h3>لانگ</h3>
+          <div class="zone">کجا: ${escapeHtml(longConfirm.zone || "نامشخص")}</div>
+          <ul>${longHow || "<li>شرط تأیید مشخص نشده</li>"}</ul>
+          ${
+            longConfirm.invalidation
+              ? `<div class="inv">باطل‌کننده: ${escapeHtml(longConfirm.invalidation)}</div>`
+              : ""
+          }
+        </div>
+        <div class="confirm short">
+          <h3>شورت</h3>
+          <div class="zone">کجا: ${escapeHtml(shortConfirm.zone || "نامشخص")}</div>
+          <ul>${shortHow || "<li>شرط تأیید مشخص نشده</li>"}</ul>
+          ${
+            shortConfirm.invalidation
+              ? `<div class="inv">باطل‌کننده: ${escapeHtml(shortConfirm.invalidation)}</div>`
+              : ""
+          }
+        </div>
+      </div>
+    </div>
+
     <div class="fill"></div>
     <div class="disclaimer">
-      این تصویر فقط تحلیل وضعیت بازار است و سیگنال خرید/فروش نیست.
+      دستور خرید/فروش نیست؛ فقط شرایط تأیید سناریوی لانگ/شورت برای مدیریت ریسک.
     </div>
   </div>
 </body>
