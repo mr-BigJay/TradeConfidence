@@ -1,0 +1,51 @@
+Create ONE cinematic dark-mode crypto futures dashboard image for Telegram.
+
+Style requirements (must follow closely):
+- Exact look of a professional institutional BTC/USDT market analysis card
+- Dark navy/black background
+- Clean dashboard layout, sharp UI panels, neon green/red/orange accents
+- Persian RTL typography that is large, readable, and correctly rendered
+- No watermark, no blurry text, no collage, no fake browser chrome
+- High detail, flat modern fintech UI, like a finished product screenshot
+
+Layout structure from top to bottom:
+1) Header row:
+   - Left: Bitcoin logo + "BTC / USDT" + subtitle "تحلیل اختصاصی بازار"
+   - Center: Bias label and value "{{BIAS}}" with yellow double arrow
+   - Right: confidence ring "{{CONFIDENCE}}%" and datetime
+
+2) Four insight cards in one row with colored side borders:
+{{INSIGHTS}}
+
+3) Three-column middle section:
+   - Left: Key levels
+     Resistances: {{RESISTANCES}}
+     Supports: {{SUPPORTS}}
+     Current range: {{RANGE}}
+   - Center: 1H candlestick chart with dashed support/resistance lines and current price tag "{{PRICE}}"
+     Below chart metrics: structure={{STRUCTURE}}, volume={{VOLUME}}, momentum={{MOMENTUM}}
+   - Right: Probable scenarios
+     Bullish {{BULL_PCT}}%: {{BULL_TEXT}} targets {{BULL_TARGETS}}
+     Neutral {{NEUTRAL_PCT}}%: {{NEUTRAL_TEXT}}
+     Bearish {{BEAR_PCT}}%: {{BEAR_TEXT}} targets {{BEAR_TARGETS}}
+
+4) Seven indicator status cards in one row:
+{{INDICATORS}}
+
+5) Two strategy panels:
+   - Long-term (green): {{LONG_STRATEGY}}
+   - Short-term (orange): {{SHORT_STRATEGY}}
+
+6) Bottom summary strip:
+   Long-term trend: {{LONG_TREND}}
+   Short-term trend: {{SHORT_TREND}}
+   Bullish continuation: {{BULLISH_PROB}}%
+   Correction risk: {{CORRECTION_PROB}}%
+
+7) Yellow disclaimer footer:
+"این تصویر صرفاً تحلیل وضعیت بازار است و سیگنال خرید/فروش نیست."
+
+Important:
+- Keep all numbers exactly as provided
+- Keep Persian text readable
+- Make it look like a polished finished dashboard, not an illustration

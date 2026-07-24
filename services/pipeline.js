@@ -10,7 +10,7 @@ const {
 const logger = require("../logger");
 const { scrapeAiResearch } = require("../playwright/scraper");
 const { analyzeAiResearch } = require("./openai");
-const { renderAnalysisCard } = require("./cardImage");
+const { renderCard } = require("./cardRenderer");
 const { sendMarketStatus } = require("./telegram");
 const { buildContentFingerprint, isSameResearch } = require("./contentFingerprint");
 
@@ -112,9 +112,9 @@ async function processSymbol(symbol, options = {}) {
 
     let imagePath = null;
     try {
-      imagePath = await renderAnalysisCard(analysis);
-      logger.info("Card image success", { symbol, imagePath });
-      await saveEvent({ symbol, event: "card_success", message: imagePath });
+      imagePath = await renderCard(analysis);
+      logger.info("Card image success", { symbol, imagePath, mode: config.runtime.cardMode });
+      await saveEvent({ symbol, event: "card_success", message: `${config.runtime.cardMode}:${imagePath}` });
     } catch (error) {
       logger.error("Card image failed, falling back to text-only Telegram", {
         symbol,

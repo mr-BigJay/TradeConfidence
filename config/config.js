@@ -25,6 +25,10 @@ const jsonMode = parseBoolean(
   authScheme === "bearer" && !baseURL,
 );
 
+const imageAuthScheme = (process.env.IMAGE_AUTH_SCHEME || authScheme || "apikey").toLowerCase();
+const imageBaseURL = (process.env.IMAGE_BASE_URL || "").replace(/\/$/, "");
+const cardMode = (process.env.CARD_MODE || "api").toLowerCase();
+
 module.exports = {
   coinex: {
     baseUrl: "https://www.coinex.com/futures",
@@ -41,6 +45,14 @@ module.exports = {
     authScheme,
     jsonMode,
   },
+  image: {
+    apiKey: process.env.IMAGE_API_KEY || process.env.OPENAI_API_KEY,
+    baseURL: imageBaseURL || undefined,
+    model: process.env.IMAGE_MODEL || "",
+    authScheme: imageAuthScheme,
+    size: process.env.IMAGE_SIZE || "1792x1024",
+    quality: process.env.IMAGE_QUALITY || "hd",
+  },
   telegram: {
     botToken: process.env.TELEGRAM_BOT_TOKEN,
     chatId: process.env.TELEGRAM_CHAT_ID,
@@ -50,5 +62,6 @@ module.exports = {
     databasePath: process.env.DATABASE_PATH || "./data/coinex-ai-bot.sqlite",
     logLevel: process.env.LOG_LEVEL || "info",
     cardScale: parsePositiveInteger(process.env.CARD_SCALE, 2),
+    cardMode: ["api", "html", "auto"].includes(cardMode) ? cardMode : "api",
   },
 };
