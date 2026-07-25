@@ -143,8 +143,17 @@ Force a full run even if the text is unchanged:
 npm run run:force
 ```
 
+Diagnose why nothing was sent:
+
+```bash
+npm run doctor
+sudo journalctl -u coinex-ai-bot -n 100 --no-pager
+```
+
 > Use `run:force` only for manual testing. The scheduled bot never uses force.
-> Normal mode sends Telegram only when CoinEx publishes a new AI Research update.
+> Normal mode sends Telegram only when CoinEx publishes a **new** AI Research update.
+> Unchanged research is skipped on purpose. If a previous run failed after scrape,
+> the bot now retries until Telegram delivery succeeds.
 
 ## Card image mode
 

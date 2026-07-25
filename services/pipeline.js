@@ -4,6 +4,7 @@ const config = require("../config/config");
 const {
   getLatestAnalysis,
   getLatestContent,
+  hasTelegramSuccessForHash,
   saveAnalysis,
   saveContent,
   saveEvent,
@@ -66,17 +67,23 @@ async function processSymbol(symbol, options = {}) {
       previousSourceUpdatedAt: latestContent?.source_updated_at || null,
     });
 
-    // Production rule: only analyze/send when CoinEx AI Research is actually new.
-    if (!options.force && isSameResearch(latestContent, fingerprint)) {
+    // Production rule: only analyze/send when CoinEx AI Research is actually new
+    // AND a previous successful delivery exists for that content.
+    const sameResearch = isSameResearch(latestContent, fingerprint);
+    const alreadyDelivered =
+      sameResearch && (await hasTelegramSuccessForHash(symbol, fingerprint.contentHash));
+
+    if (!options.force && sameResearch && alreadyDelivered) {
       logger.info("No new AI Research. Skipping GPT, card, and Telegram.", {
         symbol,
         sourceUpdatedAt: fingerprint.sourceUpdatedAt,
+        contentHash: fingerprint.contentHash.slice(0, 12),
       });
       await saveEvent({
         symbol,
         event: "no_change",
         message: fingerprint.sourceUpdatedAt
-          ? `AI Research unchanged (Time: ${fingerprint.sourceUpdatedAt})`
+          ? `AI Research content unchanged (Time: ${fingerprint.sourceUpdatedAt})`
           : "AI Research content hash unchanged",
       });
       result.ok = true;
@@ -85,20 +92,21 @@ async function processSymbol(symbol, options = {}) {
       return result;
     }
 
+    if (!options.force && sameResearch && !alreadyDelivered) {
+      logger.warn("Research seen before but Telegram delivery missing; retrying send", {
+        symbol,
+        contentHash: fingerprint.contentHash.slice(0, 12),
+      });
+    }
+
     if (options.force) {
       logger.warn("Force mode enabled: regenerating even if AI Research is unchanged", { symbol });
     }
 
     const previousAnalysisRow = await getLatestAnalysis(symbol);
 
-    await saveContent({
-      symbol,
-      textHash: fingerprint.contentHash,
-      rawText: scrapeResult.text,
-      scrapedAt: scrapeResult.datetime,
-      sourceUpdatedAt: fingerprint.sourceUpdatedAt,
-    });
-
+    // Important: do NOT mark research as processed until Telegram delivery succeeds.
+    // Otherwise a GPT/Telegram failure permanently silences the bot for that hash.
     const analysis = await analyzeAiResearch({
       symbol,
       text: scrapeResult.text,
@@ -106,13 +114,6 @@ async function processSymbol(symbol, options = {}) {
     });
     logger.info("GPT success", { symbol, hasPrevious: Boolean(previousAnalysisRow) });
     await saveEvent({ symbol, event: "gpt_success", message: "OpenAI analysis created" });
-
-    await saveAnalysis({
-      symbol,
-      textHash: fingerprint.contentHash,
-      analysis,
-      createdAt: new Date().toISOString(),
-    });
 
     let imagePath = null;
     try {
@@ -133,6 +134,21 @@ async function processSymbol(symbol, options = {}) {
       symbol,
       event: "telegram_success",
       message: imagePath ? `Telegram photo sent: ${imagePath}` : "Telegram text sent",
+    });
+
+    await saveContent({
+      symbol,
+      textHash: fingerprint.contentHash,
+      rawText: scrapeResult.text,
+      scrapedAt: scrapeResult.datetime,
+      sourceUpdatedAt: fingerprint.sourceUpdatedAt,
+    });
+
+    await saveAnalysis({
+      symbol,
+      textHash: fingerprint.contentHash,
+      analysis,
+      createdAt: new Date().toISOString(),
     });
 
     result.ok = true;

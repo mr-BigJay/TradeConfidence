@@ -131,6 +131,50 @@ async function saveEvent({ symbol = null, event, message = null, createdAt = new
   );
 }
 
+async function hasTelegramSuccessForHash(symbol, textHash) {
+  if (!symbol || !textHash) {
+    return false;
+  }
+
+  const database = await getDb();
+
+  // Content is saved only after successful Telegram delivery in the current pipeline.
+  // For older DBs that saved content too early, also require a telegram_success
+  // event at/after that scrape timestamp.
+  const content = await database.get(
+    `SELECT scraped_at FROM content_history
+     WHERE symbol = ? AND text_hash = ?
+     ORDER BY id DESC LIMIT 1`,
+    symbol,
+    textHash,
+  );
+
+  if (!content) {
+    return false;
+  }
+
+  const delivery = await database.get(
+    `SELECT id FROM event_logs
+     WHERE symbol = ? AND event = 'telegram_success' AND created_at >= ?
+     ORDER BY id DESC LIMIT 1`,
+    symbol,
+    content.scraped_at,
+  );
+
+  return Boolean(delivery);
+}
+
+async function getRecentEvents(symbol, limit = 20) {
+  const database = await getDb();
+  return database.all(
+    `SELECT created_at, event, message FROM event_logs
+     WHERE symbol = ? OR symbol IS NULL
+     ORDER BY id DESC LIMIT ?`,
+    symbol,
+    limit,
+  );
+}
+
 async function closeDb() {
   if (!db) {
     return;
@@ -145,6 +189,8 @@ module.exports = {
   getDb,
   getLatestAnalysis,
   getLatestContent,
+  getRecentEvents,
+  hasTelegramSuccessForHash,
   saveAnalysis,
   saveContent,
   saveEvent,

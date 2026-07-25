@@ -13,11 +13,15 @@ function normalizeResearchText(text) {
     .toLowerCase();
 }
 
+/**
+ * Only trust explicit CoinEx AI Research timestamps.
+ * Do NOT match random news datetimes — that can freeze dedupe forever.
+ */
 function extractResearchUpdatedAt(text) {
   const patterns = [
-    /Time:\s*(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2})/i,
-    /زمان\s*[:：]?\s*(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2})/i,
-    /(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2})\s*(?:UTC)?/i,
+    /\bTime:\s*(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2})\b/i,
+    /زمان\s*[:：]\s*(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2})/i,
+    /Updated(?:\s*at)?\s*[:：]?\s*(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2})/i,
   ];
 
   for (const pattern of patterns) {
@@ -42,17 +46,13 @@ function buildContentFingerprint(text) {
   };
 }
 
+/**
+ * Skip only when the research body itself is unchanged.
+ * Matching Time alone is NOT enough (wrong/stable timestamps must not block sends).
+ */
 function isSameResearch(latestContent, fingerprint) {
-  if (!latestContent) {
+  if (!latestContent?.text_hash || !fingerprint?.contentHash) {
     return false;
-  }
-
-  if (
-    fingerprint.sourceUpdatedAt &&
-    latestContent.source_updated_at &&
-    fingerprint.sourceUpdatedAt === latestContent.source_updated_at
-  ) {
-    return true;
   }
 
   return latestContent.text_hash === fingerprint.contentHash;
