@@ -36,7 +36,11 @@ module.exports = {
     scrapeTimeoutMs: parsePositiveInteger(process.env.SCRAPE_TIMEOUT_MS, 30000),
   },
   scheduler: {
+    // Intraday Bitunix/ coinex monitoring cadence.
     intervalMinutes: parsePositiveInteger(process.env.CHECK_INTERVAL_MINUTES, 60),
+    // Daily setup cron in Asia/Tehran (default 03:30).
+    dailyCron: process.env.DAILY_SETUP_CRON || "30 3 * * *",
+    timezone: "Asia/Tehran",
   },
   openai: {
     apiKey: process.env.OPENAI_API_KEY,

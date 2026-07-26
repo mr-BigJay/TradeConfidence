@@ -1,15 +1,20 @@
-# CoinEx AI Research Automation
+# BTC AI Analyst (Daily Setup + Live Monitoring)
 
-Automated Node.js bot that checks the CoinEx Futures AI Research section for
-`BTCUSDT`, converts the extracted text into a Persian market status report with
-OpenAI, and sends the result to Telegram.
+Bot for BTC futures desk workflow:
 
-The first version focuses only on CoinEx AI Research for BTC. The architecture is
-kept modular so future data sources such as funding rate, open interest,
-long/short ratio, liquidation heatmap, order book, and macro data can be added as
-separate services.
+1. **Daily Setup (03:30 Asia/Tehran)**  
+   Reads Bitunix futures daily data and creates **one** setup for the day:
+   Bias, Confidence, Entry, Stop Loss, TP1/TP2/TP3, Supports, Resistances,
+   Market Score, Risk Level.
 
-> The Telegram report is a market-status analysis, not a buy/sell signal.
+2. **Intraday Monitoring (hourly)**  
+   Does **not** create a new setup. Uses Bitunix 1h data (+ CoinEx AI Research
+   when new) to mark the morning setup as:
+   `Active` / `Weakening` / `Invalidated`, and updates confidence only.
+
+Auto-trading API is not connected yet. This stage is for setup quality testing.
+
+> Reports are monitoring guidance, not guaranteed execution signals.
 
 ## Stack
 
@@ -87,16 +92,22 @@ chmod +x scripts/*.sh
 nano .env
 ```
 
-Validate CoinEx access first:
+Create today's daily setup once:
 
 ```bash
-npm run scrape:btc
+npm run run:daily
 ```
 
-If scrape works, run the full pipeline once:
+Force recreate today's setup:
 
 ```bash
-npm run run:once
+npm run run:daily:force
+```
+
+Run one intraday status update:
+
+```bash
+npm run run:intraday
 ```
 
 Install as a systemd service:
@@ -113,47 +124,23 @@ sudo journalctl -u coinex-ai-bot -f
 sudo systemctl restart coinex-ai-bot
 ```
 
-## Run once
-
-Scrape only:
-
-```bash
-npm run scrape:btc
-```
-
-Full pipeline once:
-
-```bash
-npm run run:once
-```
-
-## Run scheduled
+## Schedule
 
 ```bash
 npm start
 ```
 
-The default schedule checks BTC every 60 minutes. If the extracted AI Research
-text has not changed since the previous successful scrape, OpenAI and Telegram
-are skipped to avoid duplicate messages and unnecessary API cost.
+- Daily setup cron: `DAILY_SETUP_CRON=30 3 * * *` (Iran timezone)
+- Intraday cron: every `CHECK_INTERVAL_MINUTES` (default 60)
 
-Force a full run even if the text is unchanged:
+On boot, if today's setup is missing it will be created, then one intraday check runs.
 
-```bash
-npm run run:force
-```
-
-Diagnose why nothing was sent:
+Diagnose:
 
 ```bash
 npm run doctor
 sudo journalctl -u coinex-ai-bot -n 100 --no-pager
 ```
-
-> Use `run:force` only for manual testing. The scheduled bot never uses force.
-> Normal mode sends Telegram only when CoinEx publishes a **new** AI Research update.
-> Unchanged research is skipped on purpose. If a previous run failed after scrape,
-> the bot now retries until Telegram delivery succeeds.
 
 ## Card image mode
 

@@ -2,14 +2,15 @@ const cron = require("node-cron");
 const config = require("./config/config");
 const { closeDb } = require("./database/db");
 const logger = require("./logger");
-const { runPipeline } = require("./services/pipeline");
+const { runDailySetup } = require("./services/dailySetupPipeline");
+const { runIntradayMonitor } = require("./services/intradayPipeline");
+const { IRAN_TZ } = require("./services/timeIran");
 
 const args = new Set(process.argv.slice(2));
 let isRunning = false;
 
 function buildCronExpression(intervalMinutes) {
   if (intervalMinutes === 60) {
-    // Once every hour, at minute 0.
     return "0 * * * *";
   }
 
@@ -20,15 +21,15 @@ function buildCronExpression(intervalMinutes) {
   return `*/${intervalMinutes} * * * *`;
 }
 
-async function runSafely(options = {}) {
+async function runSafely(label, fn, options = {}) {
   if (isRunning) {
-    logger.warn("Previous pipeline run is still active, skipping this tick");
+    logger.warn("Previous pipeline run is still active, skipping this tick", { label });
     return;
   }
 
   isRunning = true;
   try {
-    await runPipeline(options);
+    return await fn(options);
   } finally {
     isRunning = false;
   }
@@ -45,30 +46,68 @@ process.on("SIGTERM", () => shutdown("SIGTERM"));
 
 async function main() {
   const options = {
-    scrapeOnly: args.has("--scrape-only"),
     force: args.has("--force"),
   };
 
-  if (args.has("--once")) {
-    await runSafely(options);
+  if (args.has("--daily")) {
+    await runSafely("daily", runDailySetup, options);
     await closeDb();
     return;
   }
 
-  const expression = buildCronExpression(config.scheduler.intervalMinutes);
+  if (args.has("--intraday") || args.has("--once")) {
+    await runSafely("intraday", runIntradayMonitor, options);
+    await closeDb();
+    return;
+  }
 
-  logger.info("Starting scheduled CoinEx AI Research bot", {
-    intervalMinutes: config.scheduler.intervalMinutes,
+  // Legacy scrape-only kept for diagnostics.
+  if (args.has("--scrape-only")) {
+    const { runPipeline } = require("./services/pipeline");
+    await runSafely("scrape", runPipeline, { scrapeOnly: true, force: options.force });
+    await closeDb();
+    return;
+  }
+
+  const intradayExpression = buildCronExpression(config.scheduler.intervalMinutes);
+  const dailyExpression = config.scheduler.dailyCron;
+
+  logger.info("Starting BTC daily setup + intraday monitor bot", {
+    dailyCron: dailyExpression,
+    timezone: IRAN_TZ,
+    intradayCron: intradayExpression,
     symbols: config.coinex.symbols,
   });
 
-  await runSafely(options);
+  // On boot: if no setup today, create one; then run one intraday check.
+  await runSafely("daily-boot", runDailySetup, { force: false });
+  await runSafely("intraday-boot", runIntradayMonitor, { force: false });
 
-  cron.schedule(expression, () => {
-    runSafely(options).catch((error) => {
-      logger.error("Scheduled run failed", { error: error.message, stack: error.stack });
-    });
-  });
+  cron.schedule(
+    dailyExpression,
+    () => {
+      runSafely("daily", runDailySetup, { force: false }).catch((error) => {
+        logger.error("Scheduled daily setup failed", {
+          error: error.message,
+          stack: error.stack,
+        });
+      });
+    },
+    { timezone: IRAN_TZ },
+  );
+
+  cron.schedule(
+    intradayExpression,
+    () => {
+      runSafely("intraday", runIntradayMonitor, { force: false }).catch((error) => {
+        logger.error("Scheduled intraday monitor failed", {
+          error: error.message,
+          stack: error.stack,
+        });
+      });
+    },
+    { timezone: IRAN_TZ },
+  );
 }
 
 main().catch(async (error) => {

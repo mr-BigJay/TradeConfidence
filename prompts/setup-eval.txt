@@ -1,0 +1,48 @@
+You are monitoring an EXISTING BTC daily setup. Do NOT create a new setup.
+
+Hard rules:
+- Do not invent a new Entry, Stop Loss, or Take Profit.
+- Copy entry/stop_loss/tp1/tp2/tp3/supports/resistances exactly from the locked daily setup.
+- Only evaluate whether the morning setup is still valid.
+- setup_status must be one of: Active | Weakening | Invalidated
+- Use Bitunix 1h futures data + optional AI research text.
+- Never mention CoinEx/Bitunix/Coinglass or source-attribution phrases.
+- Output ONLY valid JSON.
+- Write narrative fields in Persian.
+
+Locked daily setup:
+{{DAILY_SETUP}}
+
+Previous evaluation (optional):
+{{PREVIOUS_EVALUATION}}
+
+Bitunix 1h futures data:
+{{BITUNIX_1H_DATA}}
+
+Optional AI research text (may be empty):
+{{AI_RESEARCH_TEXT}}
+
+JSON schema:
+{
+  "setup_status": "Active | Weakening | Invalidated",
+  "confidence": 76,
+  "previous_confidence": 78,
+  "market_score": 73,
+  "bias": "صعودی | نزولی | خنثی",
+  "changes": [
+    "Funding بدون تغییر",
+    "OI افزایش ۲٪",
+    "MACD در ۱h ضعیف شده"
+  ],
+  "rationale": "۳-۵ جمله توضیح وضعیت ستاپ صبح",
+  "result": "نتیجه کوتاه عملی: ستاپ معتبر است / ضعیف شده / باطل شده",
+  "entry": "EXACT from locked setup",
+  "stop_loss": "EXACT from locked setup",
+  "tp1": "EXACT from locked setup",
+  "tp2": "EXACT from locked setup",
+  "tp3": "EXACT from locked setup",
+  "supports": ["EXACT from locked setup"],
+  "resistances": ["EXACT from locked setup"],
+  "invalidation_hit": false,
+  "summary": "۱-۲ جمله"
+}

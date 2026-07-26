@@ -1,4 +1,5 @@
 const logger = require("../logger");
+const { summarizeIndicators, indicatorsToText } = require("./indicators");
 
 const API_BASE = "https://api.bitunix.com";
 const FAPI_BASE = "https://fapi.bitunix.com";
@@ -124,19 +125,52 @@ function formatFundingPercent(rawRate) {
   return Number(rate.toFixed(4));
 }
 
+function summarizeOrderBook(asks, bids, lastPrice) {
+  const topAsks = (asks || [])
+    .slice(0, 10)
+    .map(([price, qty]) => ({ price: toNumber(price), qty: toNumber(qty) }))
+    .filter((row) => row.price !== null && row.qty !== null);
+  const topBids = (bids || [])
+    .slice(0, 10)
+    .map(([price, qty]) => ({ price: toNumber(price), qty: toNumber(qty) }))
+    .filter((row) => row.price !== null && row.qty !== null);
+
+  const askVol = topAsks.reduce((sum, row) => sum + row.qty, 0);
+  const bidVol = topBids.reduce((sum, row) => sum + row.qty, 0);
+  const imbalance =
+    askVol + bidVol > 0 ? Number((((bidVol - askVol) / (bidVol + askVol)) * 100).toFixed(2)) : null;
+
+  return {
+    bestAsk: topAsks[0]?.price ?? null,
+    bestBid: topBids[0]?.price ?? null,
+    askVolumeTop10: Number(askVol.toFixed(4)),
+    bidVolumeTop10: Number(bidVol.toFixed(4)),
+    imbalancePercent: imbalance,
+    bias:
+      imbalance === null ? "نامشخص" : imbalance > 8 ? "خریداران قوی‌تر" : imbalance < -8 ? "فروشندگان قوی‌تر" : "متعادل",
+    lastPrice,
+  };
+}
+
 function buildChecklistText(snapshot) {
+  const candle = snapshot.dailyCandle || snapshot.lastCandle || {};
+  const book = snapshot.orderBook || {};
   const lines = [
     `Symbol: ${snapshot.symbol}`,
-    `Timeframe: ${snapshot.interval} (derivatives positioning checklist)`,
+    `Timeframe: ${snapshot.interval}`,
     `Last price: ${snapshot.lastPrice ?? "n/a"}`,
+    `24h high/low: ${snapshot.high24h ?? "n/a"} / ${snapshot.low24h ?? "n/a"}`,
     `24h change: ${snapshot.change24hPercent ?? "n/a"}%`,
+    `Volume 24h USDT: ${snapshot.volume24hUsdt ?? "n/a"}`,
+    `Daily/last candle O/H/L/C: ${candle.open ?? "n/a"} / ${candle.high ?? "n/a"} / ${candle.low ?? "n/a"} / ${candle.close ?? "n/a"}`,
     `Mark: ${snapshot.markPrice ?? "n/a"} | Index: ${snapshot.indexPrice ?? "n/a"}`,
     `Funding rate: ${snapshot.fundingRatePercent ?? "n/a"}% | Next funding: ${snapshot.nextFundingTime || "n/a"}`,
-    `Open Interest (coin): ${snapshot.openInterest.latest ?? "n/a"} (prev ${snapshot.openInterest.previous ?? "n/a"}) trend=${snapshot.openInterest.trend} change24h≈${snapshot.openInterest.change24hPercent ?? "n/a"}%`,
+    `Open Interest (coin): ${snapshot.openInterest.latest ?? "n/a"} (prev ${snapshot.openInterest.previous ?? "n/a"}) trend=${snapshot.openInterest.trend} change≈${snapshot.openInterest.changeFromPreviousPercent ?? "n/a"}%`,
     `Open Interest value USDT: ${snapshot.openInterest.latestValueUsdt ?? "n/a"}`,
     `Long/Short Accounts ratio: ${snapshot.globalLongShortAccounts.ratio ?? "n/a"} (L ${snapshot.globalLongShortAccounts.longPercent ?? "n/a"}% / S ${snapshot.globalLongShortAccounts.shortPercent ?? "n/a"}%) trend=${snapshot.globalLongShortAccounts.trend}`,
     `Top Trader Accounts ratio: ${snapshot.topTraderAccounts.ratio ?? "n/a"} (L ${snapshot.topTraderAccounts.longPercent ?? "n/a"}% / S ${snapshot.topTraderAccounts.shortPercent ?? "n/a"}%) trend=${snapshot.topTraderAccounts.trend}`,
     `Top Trader Positions ratio: ${snapshot.topTraderPositions.ratio ?? "n/a"} (L ${snapshot.topTraderPositions.longPercent ?? "n/a"}% / S ${snapshot.topTraderPositions.shortPercent ?? "n/a"}%) trend=${snapshot.topTraderPositions.trend}`,
+    `Order book imbalance: ${book.imbalancePercent ?? "n/a"}% (${book.bias || "n/a"}) bidVol=${book.bidVolumeTop10 ?? "n/a"} askVol=${book.askVolumeTop10 ?? "n/a"}`,
     `Liquidation above: ${
       snapshot.liquidationMap.aboveClusters
         .map((c) => `${c.price}≈$${c.intensityUsd}`)
@@ -149,13 +183,63 @@ function buildChecklistText(snapshot) {
     }`,
   ];
 
+  if (snapshot.indicatorsText) {
+    lines.push("Indicators:", snapshot.indicatorsText);
+  }
+
   return lines.join("\n");
+}
+
+async function fetchBitunixKlines(symbol, interval = "1h", limit = 120) {
+  const normalized = String(symbol || "BTCUSDT").trim().toUpperCase();
+  const payload = await fetchJson(
+    `${FAPI_BASE}/api/v1/futures/market/kline?symbol=${normalized}&interval=${interval}&limit=${limit}`,
+  );
+  const rows = unwrapData(payload, "kline") || [];
+  return (Array.isArray(rows) ? rows : [])
+    .map((row) => {
+      // Bitunix may return objects or arrays depending on version.
+      if (Array.isArray(row)) {
+        return {
+          time: Number(row[0]),
+          open: toNumber(row[1]),
+          high: toNumber(row[2]),
+          low: toNumber(row[3]),
+          close: toNumber(row[4]),
+          volume: toNumber(row[5]),
+        };
+      }
+      return {
+        time: toNumber(row.time || row.openTime || row.t),
+        open: toNumber(row.open ?? row.o),
+        high: toNumber(row.high ?? row.h),
+        low: toNumber(row.low ?? row.l),
+        close: toNumber(row.close ?? row.c),
+        volume: toNumber(row.volume ?? row.baseVol ?? row.quoteVol ?? row.v),
+      };
+    })
+    .filter((row) => row.close !== null)
+    .sort((a, b) => (a.time || 0) - (b.time || 0));
+}
+
+async function fetchBitunixOrderBook(symbol, limit = 30) {
+  const normalized = String(symbol || "BTCUSDT").trim().toUpperCase();
+  const payload = await fetchJson(
+    `${FAPI_BASE}/api/v1/futures/market/depth?symbol=${normalized}&limit=${limit}`,
+  );
+  const data = unwrapData(payload, "depth") || {};
+  return {
+    asks: data.asks || data.a || [],
+    bids: data.bids || data.b || [],
+  };
 }
 
 async function fetchBitunixMarketData(symbol, options = {}) {
   const normalized = String(symbol || "BTCUSDT").trim().toUpperCase();
   const interval = options.interval || "1h";
   const lower = normalized.toLowerCase();
+  const klineLimit = options.klineLimit || (interval === "1d" ? 120 : 120);
+  const liqRange = options.liqRange || (interval === "1d" ? "7d" : "1d");
 
   const [
     fundingPayload,
@@ -165,6 +249,8 @@ async function fetchBitunixMarketData(symbol, options = {}) {
     topAccountPayload,
     topPositionPayload,
     liqPayload,
+    klines,
+    orderBookRaw,
   ] = await Promise.all([
     fetchJson(`${FAPI_BASE}/api/v1/futures/market/funding_rate?symbol=${normalized}`),
     fetchJson(`${FAPI_BASE}/api/v1/futures/market/tickers?symbols=${normalized}`),
@@ -181,8 +267,16 @@ async function fetchBitunixMarketData(symbol, options = {}) {
       `${API_BASE}/innovation/basic/data/topLongShortPositionRatio/history?symbol=${normalized}&interval=${interval}`,
     ),
     fetchJson(
-      `${API_BASE}/innovation/basic/data/liquidation/map?symbol=${lower}&range=1d`,
+      `${API_BASE}/innovation/basic/data/liquidation/map?symbol=${lower}&range=${liqRange}`,
     ),
+    fetchBitunixKlines(normalized, interval, klineLimit).catch((error) => {
+      logger.warn("Bitunix klines failed", { symbol: normalized, error: error.message });
+      return [];
+    }),
+    fetchBitunixOrderBook(normalized, 15).catch((error) => {
+      logger.warn("Bitunix order book failed", { symbol: normalized, error: error.message });
+      return { asks: [], bids: [] };
+    }),
   ]);
 
   const funding = unwrapData(fundingPayload, "funding") || {};
@@ -274,8 +368,14 @@ async function fetchBitunixMarketData(symbol, options = {}) {
       trend: trendFromSeries(topPosRatios),
     },
     liquidationMap: summarizeLiquidationMap(liqData.liquidations || [], lastPrice),
+    orderBook: summarizeOrderBook(orderBookRaw.asks, orderBookRaw.bids, lastPrice),
+    klines: klines.slice(-30),
+    lastCandle: klines.length ? klines[klines.length - 1] : null,
+    dailyCandle: interval === "1d" && klines.length ? klines[klines.length - 1] : null,
   };
 
+  snapshot.indicators = summarizeIndicators(klines);
+  snapshot.indicatorsText = indicatorsToText(snapshot.indicators);
   snapshot.checklistText = buildChecklistText(snapshot);
 
   logger.info("Bitunix market data fetched", {
@@ -284,6 +384,7 @@ async function fetchBitunixMarketData(symbol, options = {}) {
     fundingRatePercent: snapshot.fundingRatePercent,
     oiTrend: snapshot.openInterest.trend,
     lsRatio: snapshot.globalLongShortAccounts.ratio,
+    klines: klines.length,
   });
 
   return snapshot;
@@ -291,4 +392,7 @@ async function fetchBitunixMarketData(symbol, options = {}) {
 
 module.exports = {
   fetchBitunixMarketData,
+  fetchBitunixKlines,
+  fetchBitunixOrderBook,
+  buildChecklistText,
 };

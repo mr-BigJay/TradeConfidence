@@ -214,10 +214,99 @@ async function sendMarketStatus(analysis, imagePath = null) {
   }
 }
 
+function statusEmoji(status) {
+  if (status === "Invalidated") return "❌";
+  if (status === "Weakening") return "⚠️";
+  return "🟢";
+}
+
+function formatDailySetupMessage(setup, meta = {}) {
+  const supports = (setup.supports || []).join(" | ") || "نامشخص";
+  const resistances = (setup.resistances || []).join(" | ") || "نامشخص";
+  return [
+    "BTC Daily Setup",
+    meta.iranDate ? `تاریخ: ${meta.iranDate} (به وقت ایران)` : null,
+    "",
+    `Bias: ${setup.bias || "خنثی"}`,
+    `Direction: ${setup.direction || "RANGE"}`,
+    `Confidence: ${setup.confidence ?? 0}%`,
+    `Market Score: ${setup.market_score ?? 0}/100`,
+    `Risk Level: ${setup.risk_level || "Medium"}`,
+    "",
+    "Main Scenario",
+    setup.main_scenario || setup.summary || "نامشخص",
+    "",
+    `Entry: ${setup.entry || "نامشخص"}`,
+    `Stop Loss: ${setup.stop_loss || "نامشخص"}`,
+    `TP1: ${setup.tp1 || "-"}`,
+    `TP2: ${setup.tp2 || "-"}`,
+    `TP3: ${setup.tp3 || "-"}`,
+    "",
+    `Important Supports: ${supports}`,
+    `Important Resistances: ${resistances}`,
+    setup.invalidation ? `\nInvalidation: ${setup.invalidation}` : null,
+    "",
+    "این ستاپ تا پایان روز معتبر است (مگر باطل شود).",
+    "⚠️ هنوز اجرای خودکار نیست؛ فقط ستاپ و رصد است.",
+  ]
+    .filter((line) => line != null && line !== "")
+    .join("\n");
+}
+
+function formatSetupUpdateMessage(evaluation, setup, meta = {}) {
+  const changes = joinLines((evaluation.changes || []).slice(0, 8), "•");
+  const confidenceLine =
+    evaluation.previous_confidence !== undefined &&
+    evaluation.previous_confidence !== evaluation.confidence
+      ? `Confidence: ${evaluation.previous_confidence}% → ${evaluation.confidence}%`
+      : `Confidence: ${evaluation.confidence ?? 0}%`;
+
+  return [
+    "BTC Update",
+    meta.clock ? meta.clock : null,
+    "",
+    "Status",
+    `${statusEmoji(evaluation.setup_status)} ${evaluation.setup_status}`,
+    "",
+    confidenceLine,
+    `Market Score: ${evaluation.market_score ?? 0}/100`,
+    "",
+    "Locked Setup",
+    `Entry: ${setup.entry}`,
+    `SL: ${setup.stop_loss} | TP1: ${setup.tp1 || "-"} | TP2: ${setup.tp2 || "-"} | TP3: ${setup.tp3 || "-"}`,
+    "",
+    changes ? `Changes\n${changes}` : null,
+    "",
+    "نتیجه",
+    evaluation.result || evaluation.rationale || evaluation.summary || "نامشخص",
+    evaluation.setup_status === "Invalidated"
+      ? "\nستاپ روزانه دیگر معتبر نیست."
+      : "\nEntry/SL/TP جدید تولید نشده؛ فقط وضعیت ستاپ صبح بررسی شده است.",
+  ]
+    .filter((line) => line != null && line !== "")
+    .join("\n");
+}
+
+async function sendDailySetup(setup, meta = {}) {
+  for (const chunk of splitTelegramText(formatDailySetupMessage(setup, meta))) {
+    await sendTelegramMessage(chunk);
+  }
+}
+
+async function sendSetupUpdate(evaluation, setup, meta = {}) {
+  for (const chunk of splitTelegramText(formatSetupUpdateMessage(evaluation, setup, meta))) {
+    await sendTelegramMessage(chunk);
+  }
+}
+
 module.exports = {
   formatDeepAnalysisMessage,
   formatCardCaption,
+  formatDailySetupMessage,
+  formatSetupUpdateMessage,
   sendMarketStatus,
+  sendDailySetup,
+  sendSetupUpdate,
   sendTelegramMessage,
   sendTelegramPhoto,
 };
