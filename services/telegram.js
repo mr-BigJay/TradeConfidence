@@ -403,8 +403,25 @@ async function sendDailySetup(setup, meta = {}) {
 }
 
 async function sendDailyTradingPlan(plan, meta = {}) {
-  const chunks = splitTelegramText(formatDailyTradingPlanMessage(plan, meta));
   const results = [];
+
+  // Chart with Entry / TP / SL first, then the written plan.
+  if (meta.chartImagePath) {
+    const caption =
+      meta.chartCaption ||
+      [
+        "BTC Daily Setup Chart",
+        meta.iranDate ? `تاریخ: ${meta.iranDate}` : null,
+        `Entry: ${plan.entry || "-"}`,
+        `TP1: ${plan.tp1 || "-"} | TP2: ${plan.tp2 || "-"} | TP3: ${plan.tp3 || "-"}`,
+        `SL: ${plan.stop_loss || "-"}`,
+      ]
+        .filter(Boolean)
+        .join("\n");
+    results.push(await sendTelegramPhoto(meta.chartImagePath, caption.slice(0, 1024)));
+  }
+
+  const chunks = splitTelegramText(formatDailyTradingPlanMessage(plan, meta));
   for (const chunk of chunks) {
     results.push(await sendTelegramMessage(chunk));
   }

@@ -69,15 +69,19 @@ async function main() {
     return;
   }
 
-  const intradayExpression = buildCronExpression(config.scheduler.intervalMinutes);
   const dailyExpression = config.scheduler.dailyCron;
+  const intradayEnabled = Boolean(config.scheduler.intradayEnabled);
 
   logger.info("Starting BTC Advanced Market Intelligence Engine", {
     dailyCron: dailyExpression,
     timezone: IRAN_TZ,
-    intradayCron: intradayExpression,
+    intradayEnabled,
+    intradayCron: intradayEnabled
+      ? buildCronExpression(config.scheduler.intervalMinutes)
+      : "disabled",
     symbols: config.coinex.symbols,
-    architecture: "CoinEx narrative + Binance reference + Deribit options + Bitunix execution",
+    architecture:
+      "CoinEx + Binance + Deribit + Chart Intelligence → Daily setup chart (Entry/TP/SL)",
   });
 
   try {
@@ -87,9 +91,8 @@ async function main() {
     logger.warn("Binance WS bootstrap skipped", { error: error.message });
   }
 
-  // On boot: if no setup today, create one; then run one intraday check.
+  // On boot: create today's plan once if missing. No intraday loop by default.
   await runSafely("daily-boot", runDailySetup, { force: false });
-  await runSafely("intraday-boot", runIntradayMonitor, { force: false });
 
   cron.schedule(
     dailyExpression,
@@ -104,18 +107,23 @@ async function main() {
     { timezone: IRAN_TZ },
   );
 
-  cron.schedule(
-    intradayExpression,
-    () => {
-      runSafely("intraday", runIntradayMonitor, { force: false }).catch((error) => {
-        logger.error("Scheduled intraday monitor failed", {
-          error: error.message,
-          stack: error.stack,
+  if (intradayEnabled) {
+    const intradayExpression = buildCronExpression(config.scheduler.intervalMinutes);
+    cron.schedule(
+      intradayExpression,
+      () => {
+        runSafely("intraday", runIntradayMonitor, { force: false }).catch((error) => {
+          logger.error("Scheduled intraday monitor failed", {
+            error: error.message,
+            stack: error.stack,
+          });
         });
-      });
-    },
-    { timezone: IRAN_TZ },
-  );
+      },
+      { timezone: IRAN_TZ },
+    );
+  } else {
+    logger.info("Intraday monitoring disabled (daily setup chart only)");
+  }
 }
 
 main().catch(async (error) => {

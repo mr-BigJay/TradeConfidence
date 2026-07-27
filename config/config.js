@@ -36,9 +36,10 @@ module.exports = {
     scrapeTimeoutMs: parsePositiveInteger(process.env.SCRAPE_TIMEOUT_MS, 30000),
   },
   scheduler: {
-    // Intraday Bitunix/ coinex monitoring cadence.
+    // Intraday monitoring is off by default — daily setup chart at 03:30 is enough.
+    intradayEnabled: parseBoolean(process.env.INTRADAY_ENABLED, false),
     intervalMinutes: parsePositiveInteger(process.env.CHECK_INTERVAL_MINUTES, 60),
-    // Daily setup cron in Asia/Tehran (default 03:30).
+    // Daily setup cron in Asia/Tehran (default 03:30, after daily candle close).
     dailyCron: process.env.DAILY_SETUP_CRON || "30 3 * * *",
     timezone: "Asia/Tehran",
   },

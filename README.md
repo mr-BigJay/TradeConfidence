@@ -10,9 +10,9 @@ Daily Trading Plan engine (03:30 Asia/Tehran) that combines:
 
 Entry/TP/SL only when **Market + Technical + Risk** confirmations pass. Pattern alone never creates a trade.
 
-Output each morning: Bias, Entry, TP1-3, SL, RR, Confidence, validation status, risk warnings.
+Output each morning (03:30 Asia/Tehran, after daily candle close): Bias, Entry, TP1-3, SL, RR, Confidence — **plus a chart image with Entry/TP/SL marked**.
 
-Intraday hourly updates evaluate the **same locked plan** (`Active` / `Weakening` / `Invalidated`) without inventing new Entry/SL/TP.
+Intraday hourly updates are **disabled by default** (`INTRADAY_ENABLED=false`). Set `INTRADAY_ENABLED=true` only if you want locked-plan status checks during the day.
 
 Auto-trading API is not connected yet.
 
@@ -130,10 +130,10 @@ sudo systemctl restart coinex-ai-bot
 npm start
 ```
 
-- Daily setup cron: `DAILY_SETUP_CRON=30 3 * * *` (Iran timezone)
-- Intraday cron: every `CHECK_INTERVAL_MINUTES` (default 60)
+- Daily setup cron: `DAILY_SETUP_CRON=30 3 * * *` (Iran timezone) — sends Trading Plan + setup chart
+- Intraday: off unless `INTRADAY_ENABLED=true`
 
-On boot, if today's setup is missing it will be created, then one intraday check runs.
+On boot, if today's setup is missing it will be created (no intraday loop by default).
 
 Diagnose:
 

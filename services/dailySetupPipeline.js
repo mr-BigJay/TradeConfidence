@@ -9,6 +9,10 @@ const { collectMarketBundle } = require("./marketBundle");
 const { scoreMarketBundle } = require("./engines/scoringEngine");
 const { createDailyTradingPlan } = require("./openaiTradingPlan");
 const { sendDailyTradingPlan } = require("./telegram");
+const {
+  renderDailySetupChart,
+  formatSetupChartCaption,
+} = require("./setupChartImage");
 const { getIranDateString, nextIranDailyCutoffIso } = require("./timeIran");
 
 async function runDailySetup(options = {}) {
@@ -66,10 +70,22 @@ async function runDailySetup(options = {}) {
 
       const createdAt = new Date().toISOString();
 
+      let chartImagePath = null;
+      try {
+        chartImagePath = await renderDailySetupChart(plan, { iranDate });
+      } catch (error) {
+        logger.warn("Daily setup chart render failed; sending text only", {
+          symbol,
+          error: error.message,
+        });
+      }
+
       const telegramResults = await sendDailyTradingPlan(plan, {
         iranDate,
         validation,
         engineScore,
+        chartImagePath,
+        chartCaption: formatSetupChartCaption(plan, { iranDate }),
       });
       const messageIds = telegramResults
         .map((item) => item?.result?.message_id)
@@ -78,6 +94,7 @@ async function runDailySetup(options = {}) {
         symbol,
         chunks: telegramResults.length,
         messageIds,
+        chartImagePath: chartImagePath || null,
         chatId: config.telegram.chatId,
       });
 
@@ -112,6 +129,7 @@ async function runDailySetup(options = {}) {
             chartSetup: marketBundle.chart?.setup || null,
             topPattern: marketBundle.chart?.top_pattern || null,
             executionCompare: marketBundle.execution?.compare || null,
+            setupChartImage: chartImagePath || null,
           },
         },
         bitunix_snapshot: {
