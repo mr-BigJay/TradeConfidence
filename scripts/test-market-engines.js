@@ -65,11 +65,45 @@ const plan = normalizeTradingPlan(
     risk_reward: "1:3",
     reason: "CVD and OI confirm narrative",
   },
-  score,
+  {
+    ...score,
+    chart_setup: {
+      ...(score.chart_setup || {}),
+      trade_allowed: true,
+      direction: "LONG",
+      entry: "62000-62200",
+      stop_loss: "60900",
+      tp1: "63000",
+      tp2: "64200",
+      tp3: "65500",
+      risk_reward: "1:3",
+    },
+  },
 );
 
 assert.equal(plan.entry, "62000-62200");
 assert.equal(plan.direction, "LONG");
+
+// GPT cannot invent LONG when trade_allowed=false.
+const rangeLocked = normalizeTradingPlan(
+  "BTCUSDT",
+  {
+    bias: "Bullish",
+    direction: "LONG",
+    confidence: 90,
+    entry: "62000-62200",
+    stop_loss: "60900",
+    tp1: "63000",
+  },
+  {
+    bias: "Neutral",
+    confidence: 60,
+    chart_setup: { trade_allowed: false, direction: "RANGE", levels_ready: true },
+  },
+);
+assert.equal(rangeLocked.direction, "RANGE");
+assert.equal(rangeLocked.bias, "Neutral");
+assert.ok(rangeLocked.confidence <= 70);
 
 const evaluation = normalizePlanEvaluation(plan, {
   setup_status: "Active",

@@ -700,14 +700,13 @@ function buildChartSetup({ htf, ltf, futuresContext = {} }) {
     (htf.indicators?.trend === "Bearish" ? 1 : 0) +
     (futuresContext.cvd?.bias === "sell_pressure" ? 1 : 0);
 
-  if (bullishVotes > bearishVotes && bullishVotes >= 2) direction = "LONG";
-  else if (bearishVotes > bullishVotes && bearishVotes >= 2) direction = "SHORT";
+  if (bullishVotes > bearishVotes && bullishVotes >= 2 && bearishVotes === 0) direction = "LONG";
+  else if (bearishVotes > bullishVotes && bearishVotes >= 2 && bullishVotes === 0) direction = "SHORT";
   else direction = "RANGE";
 
   // Pattern alone cannot force direction if confirmations fail.
   const bothConfirmed = marketConfirmation.passed && technicalConfirmation.passed;
-  if (!bothConfirmed && direction !== "RANGE") {
-    // Keep mapped levels, but force non-aggressive direction label.
+  if (!bothConfirmed) {
     direction = "RANGE";
   }
 
@@ -732,13 +731,17 @@ function buildChartSetup({ htf, ltf, futuresContext = {} }) {
     });
 
   let riskReward = null;
+  let riskRewardNumber = null;
   if (levelPlan?.entry && levelPlan.stopLoss && levelPlan.tp1) {
     const entryMid = String(levelPlan.entry).includes("-")
       ? (Number(String(levelPlan.entry).split("-")[0]) + Number(String(levelPlan.entry).split("-")[1])) / 2
       : Number(levelPlan.entry);
     const risk = Math.abs(entryMid - levelPlan.stopLoss);
     const reward = Math.abs(levelPlan.tp1 - entryMid);
-    riskReward = risk > 0 ? `1:${round(reward / risk, 2)}` : null;
+    if (risk > 0) {
+      riskRewardNumber = reward / risk;
+      riskReward = `1:${round(riskRewardNumber, 2)}`;
+    }
   }
 
   const riskManagement = {
@@ -752,9 +755,17 @@ function buildChartSetup({ htf, ltf, futuresContext = {} }) {
     invalidation: levelPlan?.invalidation || null,
   };
 
+  // Directional trade only with clean confirmations + usable RR.
+  const tradeAllowed =
+    bothConfirmed &&
+    riskManagement.passed &&
+    (direction === "LONG" || direction === "SHORT") &&
+    riskRewardNumber !== null &&
+    riskRewardNumber >= 1.2;
+
   return {
-    direction,
-    trade_allowed: bothConfirmed && riskManagement.passed && direction !== "RANGE",
+    direction: tradeAllowed ? direction : "RANGE",
+    trade_allowed: tradeAllowed,
     levels_ready: riskManagement.passed,
     market_confirmation: marketConfirmation,
     technical_confirmation: technicalConfirmation,

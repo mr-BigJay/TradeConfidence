@@ -82,8 +82,24 @@ async function runDailySetup(options = {}) {
 
       // Hard guarantee: never send نامشخص Entry/TP/SL when price/S-R exist.
       plan = ensureTradingPlanLevels(plan, engineScore, marketBundle);
+
+      // Final stance lock (GPT cannot invent LONG/SHORT without trade_allowed).
+      if (!engineScore.chart_setup?.trade_allowed) {
+        plan.direction = "RANGE";
+        plan.trade_allowed = false;
+        plan.bias = engineScore.bias || plan.bias || "Neutral";
+        plan.confidence = engineScore.confidence ?? plan.confidence;
+      } else {
+        plan.direction = engineScore.chart_setup.direction;
+        plan.trade_allowed = true;
+        plan.bias = plan.direction === "LONG" ? "Bullish" : "Bearish";
+      }
+
       logger.info("Daily plan levels ensured", {
         symbol,
+        bias: plan.bias,
+        direction: plan.direction,
+        tradeAllowed: Boolean(plan.trade_allowed),
         entry: plan.entry,
         stopLoss: plan.stop_loss,
         tp1: plan.tp1,
@@ -93,6 +109,7 @@ async function runDailySetup(options = {}) {
       });
 
       const createdAt = new Date().toISOString();
+      const replacing = Boolean(existing && options.force);
 
       let chartImagePath = null;
       try {
@@ -104,12 +121,20 @@ async function runDailySetup(options = {}) {
         });
       }
 
+      const chartCaption = [
+        replacing ? "به‌روزرسانی ستاپ امروز (جایگزین نسخه قبلی)" : null,
+        formatSetupChartCaption(plan, { iranDate }),
+      ]
+        .filter(Boolean)
+        .join("\n");
+
       const telegramResults = await sendDailyTradingPlan(plan, {
         iranDate,
         validation,
         engineScore,
         chartImagePath,
-        chartCaption: formatSetupChartCaption(plan, { iranDate }),
+        chartCaption,
+        replacing,
       });
       const messageIds = telegramResults
         .map((item) => item?.result?.message_id)

@@ -12,6 +12,8 @@ Hard rules:
 - A directional LONG/SHORT Entry is only "confirmed" when Market + Technical + Risk all pass.
 - Even on Neutral/RANGE days you MUST still output concrete numeric Entry zone, TP1, TP2, TP3, Stop Loss from Support/Resistance (never leave them empty or "نامشخص" if S/R exists).
 - Prefer precomputed chart_setup Entry/TP/SL whenever present (including when trade_allowed=false but levels_ready=true).
+- CRITICAL STANCE LOCK: If engine chart_setup.trade_allowed is false, direction MUST be "RANGE". Never output LONG or SHORT in that case. Bias may still be Bullish/Bearish lean, but Main Setup stays RANGE.
+- If chart_setup.trade_allowed is true, direction/bias MUST match chart_setup.direction (LONG→Bullish, SHORT→Bearish).
 - Bitunix is execution venue only (spread/funding/OI divergence), not primary bias source.
 - Never mention exchange brand names in user-facing text.
 - Output ONLY valid JSON.

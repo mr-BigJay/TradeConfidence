@@ -94,11 +94,43 @@ function pickLevel(...candidates) {
 }
 
 function chartGateLabel(setup = {}) {
-  if (setup.trade_allowed) return `${setup.direction || "LONG"} confirmed`;
+  if (setup.trade_allowed && (setup.direction === "LONG" || setup.direction === "SHORT")) {
+    return `${setup.direction} confirmed`;
+  }
   if (setup.levels_ready || setup.entry) {
-    return `RANGE levels mapped (no directional trade)`;
+    return "RANGE levels mapped (no directional trade)";
   }
   return "levels unavailable";
+}
+
+/**
+ * Single source of truth for daily stance.
+ * LONG/SHORT only when chart_setup.trade_allowed=true.
+ * Otherwise always RANGE (bias may still lean Bullish/Bearish from engine).
+ */
+function resolvePlanStance(engine = {}, raw = {}) {
+  const chartSetup = engine.chart_setup || {};
+  const engineBias = asBias(engine.bias || raw.bias || "Neutral");
+
+  if (
+    chartSetup.trade_allowed &&
+    (chartSetup.direction === "LONG" || chartSetup.direction === "SHORT")
+  ) {
+    return {
+      direction: chartSetup.direction,
+      bias: chartSetup.direction === "LONG" ? "Bullish" : "Bearish",
+      trade_allowed: true,
+      confidence: parsePercent(engine.confidence, parsePercent(raw.confidence, 50)),
+    };
+  }
+
+  return {
+    direction: "RANGE",
+    bias: engineBias,
+    trade_allowed: false,
+    // Do not let the model inflate confidence into a fake directional trade.
+    confidence: parsePercent(engine.confidence, parsePercent(raw.confidence, 50)),
+  };
 }
 
 function buildTechnicalFallback(engine = {}, rawTech = {}) {
@@ -150,7 +182,9 @@ function normalizeTradingPlan(symbol, raw, engine = {}) {
   const data = raw && typeof raw === "object" ? raw : {};
   const chartSetup = engine.chart_setup || {};
   const chart = engine.chart_snapshot || {};
-  const bias = asBias(data.bias || engine.bias || "Neutral");
+  const stance = resolvePlanStance(engine, data);
+  const bias = stance.bias;
+  const direction = stance.direction;
   const technical = buildTechnicalFallback(engine, data.technical_analysis || {});
 
   const supports = cleanLevels(
@@ -184,16 +218,10 @@ function normalizeTradingPlan(symbol, raw, engine = {}) {
   const fallbackFromSr = buildLevelsFromSupportsResistances(supports, resistances, currentPrice);
 
   // Prefer any concrete chart-mapped field even when trade_allowed=false.
-  const entry = pickLevel(
-    chartSetup.entry,
-    data.entry,
-    fallbackFromSr?.entry,
-  ) || "نامشخص";
-  const stopLoss = pickLevel(
-    chartSetup.stop_loss,
-    data.stop_loss,
-    fallbackFromSr?.stop_loss,
-  ) || "نامشخص";
+  const entry =
+    pickLevel(chartSetup.entry, data.entry, fallbackFromSr?.entry) || "نامشخص";
+  const stopLoss =
+    pickLevel(chartSetup.stop_loss, data.stop_loss, fallbackFromSr?.stop_loss) || "نامشخص";
   const tp1 = pickLevel(chartSetup.tp1, data.tp1, fallbackFromSr?.tp1);
   const tp2 = pickLevel(chartSetup.tp2, data.tp2, fallbackFromSr?.tp2);
   const tp3 = pickLevel(chartSetup.tp3, data.tp3, fallbackFromSr?.tp3);
@@ -207,18 +235,14 @@ function normalizeTradingPlan(symbol, raw, engine = {}) {
     stopLoss,
   );
 
-  // Direction: keep model/engine direction; only force chart direction when trade is confirmed.
-  const direction = chartSetup.trade_allowed
-    ? asDirection(chartSetup.direction, bias)
-    : asDirection(data.direction || chartSetup.direction, bias);
-
   return {
     symbol,
     pair_label: "BTC / USDT",
     bias,
     direction,
-    confidence: parsePercent(data.confidence, engine.confidence || 50),
-    market_score: parsePercent(data.market_score, engine.market_score || engine.confidence || 50),
+    trade_allowed: stance.trade_allowed,
+    confidence: stance.confidence,
+    market_score: parsePercent(data.market_score, engine.market_score || stance.confidence || 50),
     market_regime: data.market_regime || engine.market_regime || "Range",
     risk_level: ["Low", "Medium", "High"].includes(data.risk_level)
       ? data.risk_level
@@ -235,8 +259,12 @@ function normalizeTradingPlan(symbol, raw, engine = {}) {
       ...technical,
       chart_setup_status: chartGateLabel({
         ...chartSetup,
+        trade_allowed: stance.trade_allowed,
+        direction,
         entry,
-        levels_ready: Boolean(chartSetup.levels_ready || (!isBlankLevel(entry) && !isBlankLevel(stopLoss))),
+        levels_ready: Boolean(
+          chartSetup.levels_ready || (!isBlankLevel(entry) && !isBlankLevel(stopLoss)),
+        ),
       }),
     },
     execution_notes: asArray(data.execution_notes).map((item) => toAsciiDigits(item).trim()).slice(0, 5),
@@ -289,4 +317,5 @@ function normalizePlanEvaluation(lockedPlan, raw) {
 module.exports = {
   normalizeTradingPlan,
   normalizePlanEvaluation,
+  resolvePlanStance,
 };

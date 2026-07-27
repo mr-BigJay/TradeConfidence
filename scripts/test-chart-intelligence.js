@@ -156,6 +156,20 @@ assert.equal(rangePlan.entry, "64948.8-65212.5");
 assert.notEqual(rangePlan.stop_loss, "نامشخص");
 assert.ok(rangePlan.tp1);
 assert.ok(rangePlan.tp2);
+assert.equal(rangePlan.direction, "RANGE");
 assert.match(rangePlan.technical_analysis.chart_setup_status, /RANGE levels mapped|confirmed/);
+
+// Contradictory GPT LONG must be forced back to RANGE.
+const contradiction = normalizeTradingPlan(
+  "BTCUSDT",
+  { bias: "Bullish", direction: "LONG", confidence: 86, entry: "1", stop_loss: "2", tp1: "3" },
+  {
+    bias: "Neutral",
+    confidence: 60,
+    chart_setup: { trade_allowed: false, direction: "RANGE", entry: "64948.8-65212.5", stop_loss: 64754, tp1: 65496 },
+  },
+);
+assert.equal(contradiction.direction, "RANGE");
+assert.equal(contradiction.bias, "Neutral");
 
 console.log("chart intelligence tests passed");

@@ -131,15 +131,23 @@ function ensureTradingPlanLevels(plan, engineScore = {}, marketBundle = {}) {
     next.current_price = String(round1(price));
   }
 
-  // Direction stays RANGE unless already set; do not invent LONG/SHORT here.
-  if (!next.direction) next.direction = chartSetup.direction || "RANGE";
+  // Direction: LONG/SHORT only when engine trade_allowed; otherwise keep RANGE.
+  if (chartSetup.trade_allowed && (chartSetup.direction === "LONG" || chartSetup.direction === "SHORT")) {
+    next.direction = chartSetup.direction;
+    next.bias = chartSetup.direction === "LONG" ? "Bullish" : "Bearish";
+    next.trade_allowed = true;
+  } else {
+    next.direction = "RANGE";
+    next.trade_allowed = false;
+    if (!next.bias) next.bias = "Neutral";
+  }
 
   if (next.technical_analysis && typeof next.technical_analysis === "object") {
     const levelsOk = !isBlankLevel(next.entry) && !isBlankLevel(next.stop_loss);
     next.technical_analysis = {
       ...next.technical_analysis,
-      chart_setup_status: chartSetup.trade_allowed
-        ? `${chartSetup.direction || next.direction} confirmed`
+      chart_setup_status: next.trade_allowed
+        ? `${next.direction} confirmed`
         : levelsOk
           ? "RANGE levels mapped (no directional trade)"
           : next.technical_analysis.chart_setup_status || "levels mapped",

@@ -291,6 +291,7 @@ function formatDailyTradingPlanMessage(plan, meta = {}) {
   const components = meta.engineScore?.components;
 
   return [
+    meta.replacing ? "به‌روزرسانی ستاپ امروز (جایگزین نسخه قبلی)" : null,
     "BTC Daily Trading Plan",
     meta.iranDate ? `تاریخ: ${meta.iranDate} (ایران)` : null,
     "",
@@ -352,6 +353,9 @@ function formatDailyTradingPlanMessage(plan, meta = {}) {
     "Trading Setup",
     "========================",
     `Direction: ${plan.direction || "-"}`,
+    plan.trade_allowed === false && plan.direction === "RANGE"
+      ? "Note: جهت‌گیری قطعی نیست؛ فقط سطوح رنج برای رصد"
+      : null,
     `Entry Zone: ${plan.entry || "-"}`,
     `TP1: ${plan.tp1 || "-"}`,
     `TP2: ${plan.tp2 || "-"}`,
