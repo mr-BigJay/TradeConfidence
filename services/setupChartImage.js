@@ -355,10 +355,18 @@ async function renderDailySetupChart(plan, meta = {}) {
 }
 
 function formatSetupChartCaption(plan, meta = {}) {
+  const styleNote =
+    plan.direction === "RANGE" && /bear/i.test(String(plan.bias || ""))
+      ? "سبک سطوح: فروش واکنش به مقاومت (رصد رنج)"
+      : plan.direction === "RANGE" && /bull/i.test(String(plan.bias || ""))
+        ? "سبک سطوح: خرید واکنش به حمایت (رصد رنج)"
+        : null;
+
   return [
     "چارت ستاپ روزانه BTC",
     meta.iranDate ? `تاریخ: ${meta.iranDate}` : null,
     `بایاس: ${plan.bias || "Neutral"} | ${plan.direction || "RANGE"} | ${plan.confidence ?? 0}%`,
+    styleNote,
     `ورود: ${plan.entry || "-"}`,
     `حد سود: TP1 ${plan.tp1 || "-"} | TP2 ${plan.tp2 || "-"} | TP3 ${plan.tp3 || "-"}`,
     `حد ضرر: ${plan.stop_loss || "-"} | نسبت سود به زیان: ${plan.risk_reward || "-"}`,
