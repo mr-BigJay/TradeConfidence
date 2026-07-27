@@ -263,9 +263,11 @@ function formatDailySetupMessage(setup, meta = {}) {
 function formatDailyTradingPlanMessage(plan, meta = {}) {
   const futures = plan.futures_analysis || {};
   const options = plan.options_analysis || {};
+  const technical = plan.technical_analysis || {};
   const warnings = joinLines(plan.risk_warnings || [], "•");
   const executionNotes = joinLines(plan.execution_notes || [], "•");
   const validation = plan.coinex_validation_status || meta.validation?.status || "Partially Confirmed";
+  const components = meta.engineScore?.components;
 
   return [
     "BTC Daily Trading Plan",
@@ -280,6 +282,9 @@ function formatDailyTradingPlanMessage(plan, meta = {}) {
     `Confidence: ${plan.confidence ?? 0}%`,
     `Market Score: ${plan.market_score ?? 0}/100`,
     `Risk Level: ${plan.risk_level || "Medium"}`,
+    components
+      ? `Score Mix: CoinEx ${components.coinex} | Futures ${components.futures} | Options ${components.options} | Tech ${components.technical} | Pattern ${components.pattern} | Risk ${components.risk}`
+      : null,
     "",
     "========================",
     "Narrative Analysis",
@@ -306,15 +311,33 @@ function formatDailyTradingPlanMessage(plan, meta = {}) {
     `Dealer: ${options.dealer_position || "-"}`,
     "",
     "========================",
+    "Technical / Chart",
+    "========================",
+    `MTF: ${technical.mtf_summary || "-"}`,
+    `Structure: ${technical.market_structure || "-"}`,
+    `Major Support: ${technical.major_support || "-"}`,
+    `Major Resistance: ${technical.major_resistance || "-"}`,
+    `Indicators: ${technical.indicators_status || "-"}`,
+    `Volume: ${technical.volume_status || "-"}`,
+    `Pattern: ${technical.pattern || "-"}`,
+    `Fibonacci: ${technical.fibonacci || "-"}`,
+    `Liquidity: ${technical.liquidity_notes || "-"}`,
+    technical.chart_setup_status ? `Chart Gate: ${technical.chart_setup_status}` : null,
+    meta.engineScore?.chart_setup
+      ? `Confirmations: Market=${meta.engineScore.chart_setup.market_confirmation ? "OK" : "NO"} | Technical=${meta.engineScore.chart_setup.technical_confirmation ? "OK" : "NO"} | Risk=${meta.engineScore.chart_setup.risk_confirmation ? "OK" : "NO"}`
+      : null,
+    "",
+    "========================",
     "Trading Setup",
     "========================",
-    `Main Setup: ${plan.direction || "-"}`,
-    `Entry: ${plan.entry || "-"}`,
+    `Direction: ${plan.direction || "-"}`,
+    `Entry Zone: ${plan.entry || "-"}`,
     `TP1: ${plan.tp1 || "-"}`,
     `TP2: ${plan.tp2 || "-"}`,
     `TP3: ${plan.tp3 || "-"}`,
     `Stop Loss: ${plan.stop_loss || "-"}`,
-    `RR: ${plan.risk_reward || "-"}`,
+    `Risk Reward: ${plan.risk_reward || "-"}`,
+    `Confidence Score: ${plan.confidence ?? 0}/100`,
     "",
     "Reason",
     plan.reason || plan.main_scenario || "-",
@@ -332,6 +355,7 @@ function formatDailyTradingPlanMessage(plan, meta = {}) {
     "========================",
     warnings || "• Risk management required",
     "",
+    "⚠️ Pattern alone is not a trade. Final plan needs Market + Technical + Risk confirmation.",
     "⚠️ سیگنال اجرای خودکار نیست؛ Trading Plan برای تصمیم انسانی/تست است.",
   ]
     .filter((line) => line != null && line !== "")

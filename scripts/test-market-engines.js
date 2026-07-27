@@ -38,6 +38,10 @@ assert.equal(validation.status, "Confirmed");
 const score = scoreMarketBundle(bundle);
 assert.equal(score.bias, "Bullish");
 assert.ok(score.confidence >= 50);
+assert.ok(score.components);
+assert.equal(typeof score.components.technical, "number");
+assert.ok(score.chart_setup);
+assert.equal(score.total_score, score.confidence);
 
 const plan = normalizeTradingPlan(
   "BTCUSDT",

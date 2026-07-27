@@ -1,11 +1,15 @@
 const logger = require("../logger");
 const { scrapeAiResearch } = require("../playwright/scraper");
-const { fetchBinanceFuturesSnapshot } = require("./providers/binanceFutures");
+const {
+  fetchBinanceFuturesSnapshot,
+  fetchBinanceMultiTimeframeCandles,
+} = require("./providers/binanceFutures");
 const { fetchDeribitOptionsSnapshot } = require("./providers/deribitOptions");
 const {
   fetchBitunixExecutionSnapshot,
   compareExecutionVenue,
 } = require("./providers/bitunixExecution");
+const { analyzeChartIntelligence } = require("./chart/analyzeChart");
 
 /**
  * Exchange-agnostic normalized market bundle for scoring/validation.
@@ -17,6 +21,7 @@ function normalizeMarketBundle({
   deribit = null,
   bitunix = null,
   executionCompare = null,
+  chart = null,
 }) {
   return {
     symbol,
@@ -79,6 +84,12 @@ function normalizeMarketBundle({
       checklistText: bitunix?.checklistText || "",
       raw: bitunix,
     },
+    chart: chart || {
+      source: "chart_intelligence",
+      role: "technical_chart_analysis",
+      available: false,
+      checklistText: "Chart intelligence unavailable",
+    },
   };
 }
 
@@ -93,16 +104,24 @@ function bundleToPromptText(bundle) {
     "=== Deribit Options ===",
     bundle.options?.checklistText || "Deribit options unavailable",
     "",
+    "=== Chart Technical Intelligence ===",
+    bundle.chart?.checklistText || "Chart intelligence unavailable",
+    "",
     "=== Bitunix Execution Venue ===",
     bundle.execution?.checklistText || "Bitunix execution data unavailable",
     "",
     "=== Venue Divergence Notes ===",
     ...(bundle.execution?.compare?.notes || ["n/a"]),
+    "",
+    "=== Chart Setup Rule ===",
+    bundle.chart?.setup?.rule ||
+      "Pattern alone never creates a trade. Need Market + Technical + Risk confirmations.",
   ].join("\n");
 }
 
 async function collectMarketBundle(symbol, options = {}) {
   const includeResearch = options.includeResearch !== false;
+  const includeChart = options.includeChart !== false;
   const period = options.period || "1h";
 
   const tasks = {
@@ -134,6 +153,13 @@ async function collectMarketBundle(symbol, options = {}) {
     }),
   };
 
+  if (includeChart) {
+    tasks.candles = fetchBinanceMultiTimeframeCandles(symbol).catch((error) => {
+      logger.warn("Multi-TF candles failed", { error: error.message });
+      return {};
+    });
+  }
+
   if (includeResearch) {
     tasks.coinex = scrapeAiResearch(symbol)
       .then((scrape) => scrape)
@@ -151,6 +177,24 @@ async function collectMarketBundle(symbol, options = {}) {
   );
 
   const executionCompare = compareExecutionVenue(settled.binance, settled.bitunix);
+
+  let chart = null;
+  if (includeChart) {
+    chart = analyzeChartIntelligence(settled.candles || {}, {
+      fundingRatePercent: settled.binance?.fundingRatePercent,
+      openInterest: settled.binance?.openInterest,
+      cvd: settled.binance?.cvd,
+      orderBook: settled.binance?.orderBook,
+    });
+    logger.info("Chart intelligence ready", {
+      symbol,
+      available: chart.available,
+      direction: chart.setup?.direction,
+      tradeAllowed: chart.setup?.trade_allowed,
+      topPattern: chart.top_pattern?.name || null,
+    });
+  }
+
   const bundle = normalizeMarketBundle({
     symbol,
     coinex: includeResearch ? settled.coinex : null,
@@ -158,6 +202,7 @@ async function collectMarketBundle(symbol, options = {}) {
     deribit: settled.deribit,
     bitunix: settled.bitunix,
     executionCompare,
+    chart,
   });
 
   bundle.promptText = bundleToPromptText(bundle);

@@ -342,7 +342,45 @@ async function fetchBinanceFuturesSnapshot(symbol = "BTCUSDT", options = {}) {
   return snapshot;
 }
 
+async function fetchBinanceKlines(symbol = "BTCUSDT", interval = "1h", limit = 200, options = {}) {
+  const normalized = String(symbol || "BTCUSDT").trim().toUpperCase();
+  const fapi = (options.fapiBase || DEFAULT_FAPI).replace(/\/$/, "");
+  const rows = await fetchJson(
+    `${fapi}/fapi/v1/klines?symbol=${normalized}&interval=${interval}&limit=${limit}`,
+  );
+  return (Array.isArray(rows) ? rows : []).map((row) => ({
+    time: Number(row[0]),
+    open: toNumber(row[1]),
+    high: toNumber(row[2]),
+    low: toNumber(row[3]),
+    close: toNumber(row[4]),
+    volume: toNumber(row[5]),
+    quoteVolume: toNumber(row[7]),
+    takerBuyBase: toNumber(row[9]),
+    takerBuyQuote: toNumber(row[10]),
+  }));
+}
+
+async function fetchBinanceMultiTimeframeCandles(symbol = "BTCUSDT", options = {}) {
+  const intervals = options.intervals || ["1d", "4h", "1h", "15m", "5m"];
+  const limits = options.limits || { "1d": 180, "4h": 180, "1h": 240, "15m": 240, "5m": 240 };
+  const entries = await Promise.all(
+    intervals.map(async (interval) => {
+      try {
+        const candles = await fetchBinanceKlines(symbol, interval, limits[interval] || 200, options);
+        return [interval, candles];
+      } catch (error) {
+        logger.warn("Binance multi-TF kline failed", { interval, error: error.message });
+        return [interval, []];
+      }
+    }),
+  );
+  return Object.fromEntries(entries);
+}
+
 module.exports = {
   fetchBinanceFuturesSnapshot,
+  fetchBinanceKlines,
+  fetchBinanceMultiTimeframeCandles,
   computeCvdFromAggTrades,
 };

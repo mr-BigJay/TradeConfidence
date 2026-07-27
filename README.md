@@ -5,7 +5,10 @@ Daily Trading Plan engine (03:30 Asia/Tehran) that combines:
 - **CoinEx** → narrative / scenarios / levels (kept)
 - **Binance Futures** → market truth (funding, OI, CVD, L/S, depth…)
 - **Deribit Options** → PCR, Max Pain, IV, dealer gamma proxy
+- **Chart Intelligence** → multi-TF TA (1D/4H/1H/15M/5M): structure, S/R, EMA/RSI/MACD/VWAP, patterns, Fib, liquidity
 - **Bitunix** → execution venue only (price/funding/OI/orderbook divergence)
+
+Entry/TP/SL only when **Market + Technical + Risk** confirmations pass. Pattern alone never creates a trade.
 
 Output each morning: Bias, Entry, TP1-3, SL, RR, Confidence, validation status, risk warnings.
 

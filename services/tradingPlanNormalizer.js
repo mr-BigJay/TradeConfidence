@@ -51,14 +51,102 @@ function asStatus(value) {
   return "Active";
 }
 
+function buildTechnicalFallback(engine = {}, rawTech = {}) {
+  const chart = engine.chart_snapshot || {};
+  const setup = engine.chart_setup || {};
+  const pattern = chart.top_pattern;
+  const mtf = chart.multi_timeframe || {};
+  return {
+    mtf_summary:
+      rawTech.mtf_summary ||
+      (Object.keys(mtf).length
+        ? `1D=${mtf["1d"]} | 4H=${mtf["4h"]} | 1H=${mtf["1h"]} | 15M=${mtf["15m"]} | 5M=${mtf["5m"]}`
+        : ""),
+    market_structure: rawTech.market_structure || chart.htf?.structure?.structure || "",
+    major_support:
+      rawTech.major_support ||
+      (chart.htf?.levels?.majorSupport || []).join(", ") ||
+      "",
+    major_resistance:
+      rawTech.major_resistance ||
+      (chart.htf?.levels?.majorResistance || []).join(", ") ||
+      "",
+    indicators_status:
+      rawTech.indicators_status ||
+      (chart.htf?.indicators
+        ? `Trend=${chart.htf.indicators.trend} EMA20=${chart.htf.indicators.ema20} RSI=${chart.ltf?.indicators?.rsi} MACD=${chart.ltf?.indicators?.macd?.bias}`
+        : ""),
+    volume_status: rawTech.volume_status || chart.ltf?.volume?.confirmation || "",
+    pattern:
+      rawTech.pattern ||
+      (pattern
+        ? `${pattern.name} ${pattern.timeframe} (${pattern.confidence}%)`
+        : "none"),
+    fibonacci:
+      rawTech.fibonacci ||
+      (chart.htf?.fibonacci?.levels
+        ? `0.382=${chart.htf.fibonacci.levels["0.382"]} | 0.5=${chart.htf.fibonacci.levels["0.5"]} | 0.618=${chart.htf.fibonacci.levels["0.618"]}`
+        : ""),
+    liquidity_notes:
+      rawTech.liquidity_notes ||
+      (chart.liquidity?.notes || []).join(" | ") ||
+      chart.liquidity?.state ||
+      "",
+    chart_setup_status: setup.trade_allowed
+      ? `${setup.direction} allowed`
+      : "blocked (need Market+Technical+Risk)",
+  };
+}
+
 function normalizeTradingPlan(symbol, raw, engine = {}) {
   const data = raw && typeof raw === "object" ? raw : {};
+  const chartSetup = engine.chart_setup || {};
   const bias = asBias(data.bias || engine.bias || "Neutral");
+
+  // Prefer confirmed chart setup levels when available.
+  const preferChart = Boolean(chartSetup.trade_allowed);
+  const entry =
+    (preferChart && chartSetup.entry) ||
+    normalizeLevelText(data.entry) ||
+    toAsciiDigits(data.entry || "").trim() ||
+    "نامشخص";
+  const stopLoss =
+    (preferChart && chartSetup.stop_loss) ||
+    normalizeLevelText(data.stop_loss) ||
+    toAsciiDigits(data.stop_loss || "").trim() ||
+    "نامشخص";
+  const tp1 =
+    (preferChart && chartSetup.tp1) ||
+    normalizeLevelText(data.tp1) ||
+    toAsciiDigits(data.tp1 || "").trim() ||
+    "";
+  const tp2 =
+    (preferChart && chartSetup.tp2) ||
+    normalizeLevelText(data.tp2) ||
+    toAsciiDigits(data.tp2 || "").trim() ||
+    "";
+  const tp3 =
+    (preferChart && chartSetup.tp3) ||
+    normalizeLevelText(data.tp3) ||
+    toAsciiDigits(data.tp3 || "").trim() ||
+    "";
+
+  const supports = cleanLevels(
+    [
+      ...(preferChart ? [chartSetup.entry?.split?.("-")?.[0]].filter(Boolean) : []),
+      ...asArray(data.supports),
+    ],
+    4,
+  );
+  const resistances = cleanLevels(data.resistances, 4);
+
   return {
     symbol,
     pair_label: "BTC / USDT",
     bias,
-    direction: asDirection(data.direction, bias),
+    direction: preferChart
+      ? asDirection(chartSetup.direction, bias)
+      : asDirection(data.direction, bias),
     confidence: parsePercent(data.confidence, engine.confidence || 50),
     market_score: parsePercent(data.market_score, engine.market_score || engine.confidence || 50),
     market_regime: data.market_regime || engine.market_regime || "Range",
@@ -73,19 +161,24 @@ function normalizeTradingPlan(symbol, raw, engine = {}) {
     ),
     futures_analysis: data.futures_analysis || {},
     options_analysis: data.options_analysis || {},
+    technical_analysis: buildTechnicalFallback(engine, data.technical_analysis || {}),
     execution_notes: asArray(data.execution_notes).map((item) => toAsciiDigits(item).trim()).slice(0, 5),
     main_scenario: toAsciiDigits(data.main_scenario || data.reason || "").trim(),
-    entry: normalizeLevelText(data.entry) || toAsciiDigits(data.entry || "").trim() || "نامشخص",
-    stop_loss:
-      normalizeLevelText(data.stop_loss) || toAsciiDigits(data.stop_loss || "").trim() || "نامشخص",
-    tp1: normalizeLevelText(data.tp1) || toAsciiDigits(data.tp1 || "").trim() || "",
-    tp2: normalizeLevelText(data.tp2) || toAsciiDigits(data.tp2 || "").trim() || "",
-    tp3: normalizeLevelText(data.tp3) || toAsciiDigits(data.tp3 || "").trim() || "",
-    risk_reward: toAsciiDigits(data.risk_reward || data.rr || "").trim() || "n/a",
-    supports: cleanLevels(data.supports, 4),
-    resistances: cleanLevels(data.resistances, 4),
+    entry,
+    stop_loss: stopLoss,
+    tp1,
+    tp2,
+    tp3,
+    risk_reward:
+      (preferChart && chartSetup.risk_reward) ||
+      toAsciiDigits(data.risk_reward || data.rr || "").trim() ||
+      "n/a",
+    supports,
+    resistances,
     invalidation_level:
-      normalizeLevelText(data.invalidation_level) || toAsciiDigits(data.invalidation_level || "").trim(),
+      (preferChart && chartSetup.invalidation) ||
+      normalizeLevelText(data.invalidation_level) ||
+      toAsciiDigits(data.invalidation_level || "").trim(),
     reversal_trigger: toAsciiDigits(data.reversal_trigger || "").trim(),
     alternative_scenario: toAsciiDigits(data.alternative_scenario || "").trim(),
     risk_warnings: asArray(data.risk_warnings).map((item) => toAsciiDigits(item).trim()).slice(0, 6),

@@ -108,6 +108,9 @@ async function runDailySetup(options = {}) {
             binanceAvailable: marketBundle.futures?.available,
             deribitAvailable: marketBundle.options?.available,
             bitunixAvailable: marketBundle.execution?.available,
+            chartAvailable: marketBundle.chart?.available,
+            chartSetup: marketBundle.chart?.setup || null,
+            topPattern: marketBundle.chart?.top_pattern || null,
             executionCompare: marketBundle.execution?.compare || null,
           },
         },
@@ -115,6 +118,7 @@ async function runDailySetup(options = {}) {
           binance: marketBundle.futures?.raw || null,
           deribit: marketBundle.options?.raw || null,
           bitunix: marketBundle.execution?.raw || null,
+          chart: marketBundle.chart || null,
         },
         status: "Active",
       });
