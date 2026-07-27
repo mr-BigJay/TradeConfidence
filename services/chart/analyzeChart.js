@@ -584,7 +584,16 @@ function analyzeLiquidity(candles, levels, futuresContext = {}) {
   };
 }
 
-function buildLevelPlan({ direction, price, majorSupport, majorResistance, support2, resistance2, fib }) {
+function buildLevelPlan({
+  direction,
+  bias = "Neutral",
+  price,
+  majorSupport,
+  majorResistance,
+  support2,
+  resistance2,
+  fib,
+}) {
   const px = Number.isFinite(price) ? price : null;
   const fib618 = fib["0.618"];
   const fib5 = fib["0.5"];
@@ -593,44 +602,61 @@ function buildLevelPlan({ direction, price, majorSupport, majorResistance, suppo
   const fib786 = fib["0.786"];
 
   if (direction === "LONG") {
-    const zoneLow = majorSupport || fib618 || (px ? round(px * 0.985, 1) : null);
-    const zoneHigh = fib5 || (zoneLow ? round(zoneLow * 1.004, 1) : null);
-    if (!zoneLow || !zoneHigh) return null;
+    const zoneLow = majorSupport || fib618 || (px ? round(px * 0.992, 1) : null);
+    if (!zoneLow) return null;
+    const zoneHigh = round(Math.min(zoneLow * 1.0035, majorResistance || zoneLow * 1.0035), 1);
     const entry = `${round(Math.min(zoneLow, zoneHigh), 1)}-${round(Math.max(zoneLow, zoneHigh), 1)}`;
-    const stopLoss = round((majorSupport || zoneLow) * 0.992, 1);
-    const tp1 = majorResistance || fib236 || (px ? round(px * 1.01, 1) : round(zoneHigh * 1.01, 1));
-    const tp2 = resistance2 || round(tp1 * 1.015, 1);
-    const tp3 = round(tp1 * 1.03, 1);
+    const stopLoss = round((support2 || zoneLow) * 0.996, 1);
+    let tp1 = majorResistance || fib236 || (px ? round(px * 1.01, 1) : round(zoneHigh * 1.01, 1));
+    let tp2 = resistance2 || round(tp1 * 1.01, 1);
+    let tp3 = round(tp2 * 1.01, 1);
+    const mid = (zoneLow + zoneHigh) / 2;
+    if (tp1 <= mid) tp1 = round(mid * 1.008, 1);
+    if (tp2 <= tp1) tp2 = round(tp1 * 1.008, 1);
+    if (tp3 <= tp2) tp3 = round(tp2 * 1.008, 1);
     return { entry, stopLoss, tp1, tp2, tp3, invalidation: stopLoss };
   }
 
   if (direction === "SHORT") {
-    const zoneHigh = majorResistance || fib382 || (px ? round(px * 1.015, 1) : null);
-    const zoneLow = fib5 || (zoneHigh ? round(zoneHigh * 0.996, 1) : null);
-    if (!zoneLow || !zoneHigh) return null;
+    const zoneHigh = majorResistance || fib382 || (px ? round(px * 1.008, 1) : null);
+    if (!zoneHigh) return null;
+    const zoneLow = round(Math.max(zoneHigh * 0.9965, majorSupport || zoneHigh * 0.9965), 1);
     const entry = `${round(Math.min(zoneLow, zoneHigh), 1)}-${round(Math.max(zoneLow, zoneHigh), 1)}`;
-    const stopLoss = round((majorResistance || zoneHigh) * 1.008, 1);
-    const tp1 = majorSupport || fib786 || (px ? round(px * 0.99, 1) : round(zoneLow * 0.99, 1));
-    const tp2 = support2 || round(tp1 * 0.985, 1);
-    const tp3 = round(tp1 * 0.97, 1);
+    const stopLoss = round((resistance2 || zoneHigh) * 1.004, 1);
+    let tp1 = majorSupport || fib786 || (px ? round(px * 0.99, 1) : round(zoneLow * 0.99, 1));
+    let tp2 = support2 || round(tp1 * 0.99, 1);
+    let tp3 = round(tp2 * 0.99, 1);
+    const mid = (zoneLow + zoneHigh) / 2;
+    if (tp1 >= mid) tp1 = round(mid * 0.992, 1);
+    if (tp2 >= tp1) tp2 = round(tp1 * 0.992, 1);
+    if (tp3 >= tp2) tp3 = round(tp2 * 0.992, 1);
     return { entry, stopLoss, tp1, tp2, tp3, invalidation: stopLoss };
   }
 
-  // RANGE / Neutral: still publish concrete day levels from S/R for the chart.
-  const support = majorSupport || fib618 || (px ? round(px * 0.99, 1) : null);
-  const lower = support2 || (support ? round(support * 0.995, 1) : null);
-  const resistance = majorResistance || fib236 || (px ? round(px * 1.01, 1) : null);
-  const upper = resistance2 || (resistance ? round(resistance * 1.015, 1) : null);
-  if (!support || !resistance || !lower) return null;
-
-  const entryLow = round(Math.min(support, lower), 1);
-  const entryHigh = round(Math.max(support, fib5 || support), 1);
-  const entry = `${entryLow}-${entryHigh}`;
-  const stopLoss = round(lower * 0.997, 1);
-  const tp1 = round((support + resistance) / 2, 1);
-  const tp2 = resistance;
-  const tp3 = upper || round(resistance * 1.015, 1);
-  return { entry, stopLoss, tp1, tp2, tp3, invalidation: stopLoss };
+  // RANGE: geometry follows bias lean (Bearish→short-style, else long-style).
+  const shortBias = /bear/i.test(String(bias || ""));
+  if (shortBias) {
+    return buildLevelPlan({
+      direction: "SHORT",
+      bias,
+      price,
+      majorSupport,
+      majorResistance,
+      support2,
+      resistance2,
+      fib,
+    });
+  }
+  return buildLevelPlan({
+    direction: "LONG",
+    bias,
+    price,
+    majorSupport,
+    majorResistance,
+    support2,
+    resistance2,
+    fib,
+  });
 }
 
 function buildChartSetup({ htf, ltf, futuresContext = {} }) {
@@ -704,6 +730,17 @@ function buildChartSetup({ htf, ltf, futuresContext = {} }) {
   else if (bearishVotes > bullishVotes && bearishVotes >= 2 && bullishVotes === 0) direction = "SHORT";
   else direction = "RANGE";
 
+  const leanBias =
+    direction === "LONG"
+      ? "Bullish"
+      : direction === "SHORT"
+        ? "Bearish"
+        : bearishVotes > bullishVotes
+          ? "Bearish"
+          : bullishVotes > bearishVotes
+            ? "Bullish"
+            : "Neutral";
+
   // Pattern alone cannot force direction if confirmations fail.
   const bothConfirmed = marketConfirmation.passed && technicalConfirmation.passed;
   if (!bothConfirmed) {
@@ -713,6 +750,7 @@ function buildChartSetup({ htf, ltf, futuresContext = {} }) {
   const levelPlan =
     buildLevelPlan({
       direction,
+      bias: leanBias,
       price,
       majorSupport,
       majorResistance,
@@ -722,6 +760,7 @@ function buildChartSetup({ htf, ltf, futuresContext = {} }) {
     }) ||
     buildLevelPlan({
       direction: "RANGE",
+      bias: leanBias,
       price,
       majorSupport,
       majorResistance,

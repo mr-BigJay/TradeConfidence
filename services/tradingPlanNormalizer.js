@@ -61,26 +61,27 @@ function firstPriceText(value) {
   return prices.length ? String(prices[0]) : "";
 }
 
-function buildLevelsFromSupportsResistances(supports, resistances, currentPrice) {
+function buildLevelsFromSupportsResistances(supports, resistances, currentPrice, bias = "Neutral") {
+  const { buildActionableLevels } = require("./ensurePlanLevels");
   const supportNums = supports.map((item) => extractPrices(item)[0]).filter(Number.isFinite);
   const resistanceNums = resistances.map((item) => extractPrices(item)[0]).filter(Number.isFinite);
   const price = extractPrices(currentPrice)[0];
-  if (!supportNums.length || !resistanceNums.length) return null;
-
-  const support = Math.max(...supportNums.filter((v) => !price || v <= price), supportNums[0]);
-  const lower = Math.min(...supportNums);
-  const resistance = Math.min(...resistanceNums.filter((v) => !price || v >= price), resistanceNums[0]);
-  const upper = Math.max(...resistanceNums);
-  if (!Number.isFinite(support) || !Number.isFinite(resistance)) return null;
-
+  const rebuilt = buildActionableLevels({
+    bias,
+    direction: "RANGE",
+    price,
+    supports: supportNums,
+    resistances: resistanceNums,
+  });
+  if (!rebuilt) return null;
   return {
-    entry: `${Math.round(Math.min(support, lower))}-${Math.round(Math.max(support, lower))}`,
-    stop_loss: String(Math.round(lower * 0.997)),
-    tp1: String(Math.round((support + resistance) / 2)),
-    tp2: String(Math.round(resistance)),
-    tp3: String(Math.round(upper)),
-    risk_reward: "n/a",
-    invalidation: String(Math.round(lower * 0.997)),
+    entry: rebuilt.entry,
+    stop_loss: rebuilt.stop_loss,
+    tp1: rebuilt.tp1,
+    tp2: rebuilt.tp2,
+    tp3: rebuilt.tp3,
+    risk_reward: rebuilt.risk_reward,
+    invalidation: rebuilt.invalidation,
   };
 }
 
@@ -215,7 +216,12 @@ function normalizeTradingPlan(symbol, raw, engine = {}) {
     (chart.htf?.price != null ? String(chart.htf.price) : "");
 
   // Always prefer concrete chart-mapped levels when present (even on RANGE days).
-  const fallbackFromSr = buildLevelsFromSupportsResistances(supports, resistances, currentPrice);
+  const fallbackFromSr = buildLevelsFromSupportsResistances(
+    supports,
+    resistances,
+    currentPrice,
+    bias,
+  );
 
   // Prefer any concrete chart-mapped field even when trade_allowed=false.
   const entry =
