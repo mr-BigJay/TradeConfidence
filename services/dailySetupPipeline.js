@@ -49,7 +49,18 @@ async function runDailySetup(options = {}) {
       const validation = engineScore.validation;
 
       if (!marketBundle.coinex?.available) {
-        logger.warn("CoinEx narrative missing; plan will rely more on market data", { symbol });
+        logger.warn("CoinEx narrative missing; plan will rely more on market data", {
+          symbol,
+          error: marketBundle.coinex?.error || null,
+          fromCache: Boolean(marketBundle.coinex?.fromCache),
+        });
+      } else {
+        logger.info("CoinEx narrative attached to daily plan", {
+          symbol,
+          length: marketBundle.coinex.text.length,
+          fromCache: Boolean(marketBundle.coinex.fromCache),
+          url: marketBundle.coinex.url,
+        });
       }
       if (!marketBundle.futures?.available) {
         logger.warn("Binance futures unavailable; confidence will be capped by coverage", {

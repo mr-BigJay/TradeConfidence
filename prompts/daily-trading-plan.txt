@@ -4,7 +4,8 @@ Mission:
 Combine CoinEx narrative + Binance futures facts + Deribit options + Chart technical intelligence + Bitunix execution checks into ONE executable daily trading plan.
 
 Hard rules:
-- CoinEx text is the narrative core. Preserve its scenarios/levels when present.
+- CoinEx text is the narrative core. If CoinEx Narrative section has real research text, summarize it in Persian in coinex_summary. Never say "تحلیل متنی در دسترس نیست" when that text is present.
+- Only say narrative is unavailable when the CoinEx Narrative section explicitly says unavailable/scrape failed.
 - Binance is market truth for futures positioning.
 - Deribit is options intelligence.
 - Chart intelligence provides structure/S-R/indicators/patterns/fibonacci, but PATTERN ALONE never creates a trade.

@@ -10,6 +10,8 @@ const {
   compareExecutionVenue,
 } = require("./providers/bitunixExecution");
 const { analyzeChartIntelligence } = require("./chart/analyzeChart");
+const { getLatestContent, saveContent } = require("../database/db");
+const { buildContentFingerprint } = require("./contentFingerprint");
 
 /**
  * Exchange-agnostic normalized market bundle for scoring/validation.
@@ -28,12 +30,14 @@ function normalizeMarketBundle({
     fetchedAt: new Date().toISOString(),
     coinex: coinex
       ? {
-          source: "coinex",
+          source: coinex.source || "coinex",
           role: "market_narrative",
-          available: Boolean(coinex.text),
+          available: Boolean(coinex.text && String(coinex.text).trim().length > 40),
           text: coinex.text || "",
           url: coinex.url || null,
-          scrapedAt: coinex.datetime || null,
+          scrapedAt: coinex.datetime || coinex.scrapedAt || null,
+          fromCache: Boolean(coinex.fromCache),
+          error: coinex.error || null,
         }
       : { source: "coinex", role: "market_narrative", available: false, text: "" },
     futures: {
@@ -94,9 +98,13 @@ function normalizeMarketBundle({
 }
 
 function bundleToPromptText(bundle) {
+  const narrative = bundle.coinex?.available
+    ? bundle.coinex.text
+    : `CoinEx research unavailable${bundle.coinex?.error ? ` (${bundle.coinex.error})` : ""}. Do NOT invent a CoinEx narrative. Leave coinex_summary empty or say scrape failed, and rely on Futures/Options/Chart.`;
+
   return [
-    "=== CoinEx Narrative ===",
-    bundle.coinex?.available ? bundle.coinex.text : "CoinEx research unavailable",
+    "=== CoinEx Narrative (PRIMARY TEXT ANALYSIS — use this if present) ===",
+    narrative,
     "",
     "=== Binance Futures Reference ===",
     bundle.futures?.checklistText || "Binance futures unavailable",
@@ -119,10 +127,69 @@ function bundleToPromptText(bundle) {
   ].join("\n");
 }
 
+async function loadCachedResearch(symbol) {
+  try {
+    const latest = await getLatestContent(symbol);
+    if (!latest?.raw_text || String(latest.raw_text).trim().length < 80) return null;
+    return {
+      source: "coinex_cache",
+      text: latest.raw_text,
+      datetime: latest.scraped_at || null,
+      url: null,
+      fromCache: true,
+    };
+  } catch (error) {
+    logger.warn("Failed loading cached CoinEx research", { symbol, error: error.message });
+    return null;
+  }
+}
+
+async function persistResearch(symbol, scrape) {
+  if (!scrape?.text || scrape.fromCache) return;
+  try {
+    const fingerprint = buildContentFingerprint(scrape.text);
+    await saveContent({
+      symbol,
+      textHash: fingerprint.contentHash,
+      rawText: scrape.text,
+      scrapedAt: scrape.datetime || new Date().toISOString(),
+      sourceUpdatedAt: fingerprint.sourceUpdatedAt,
+    });
+  } catch (error) {
+    logger.warn("Failed saving CoinEx research to DB", { symbol, error: error.message });
+  }
+}
+
+async function collectCoinExResearch(symbol) {
+  try {
+    const scrape = await scrapeAiResearch(symbol, { retries: 2 });
+    await persistResearch(symbol, scrape);
+    return scrape;
+  } catch (error) {
+    logger.warn("CoinEx research scrape failed; trying DB cache", { error: error.message });
+    const cached = await loadCachedResearch(symbol);
+    if (cached) {
+      logger.info("Using cached CoinEx research", {
+        symbol,
+        length: cached.text.length,
+        scrapedAt: cached.datetime,
+      });
+      return { ...cached, error: error.message };
+    }
+    return { text: "", datetime: null, url: null, error: error.message };
+  }
+}
+
 async function collectMarketBundle(symbol, options = {}) {
   const includeResearch = options.includeResearch !== false;
   const includeChart = options.includeChart !== false;
   const period = options.period || "1h";
+
+  // Scrape CoinEx FIRST (Chromium is heavy). Avoid racing it with other fetches.
+  let coinex = null;
+  if (includeResearch) {
+    coinex = await collectCoinExResearch(symbol);
+  }
 
   const tasks = {
     binance: fetchBinanceFuturesSnapshot(symbol, { period }).catch((error) => {
@@ -160,15 +227,6 @@ async function collectMarketBundle(symbol, options = {}) {
     });
   }
 
-  if (includeResearch) {
-    tasks.coinex = scrapeAiResearch(symbol)
-      .then((scrape) => scrape)
-      .catch((error) => {
-        logger.warn("CoinEx research scrape failed", { error: error.message });
-        return { text: "", datetime: null, url: null, error: error.message };
-      });
-  }
-
   const settled = {};
   await Promise.all(
     Object.entries(tasks).map(async ([key, promise]) => {
@@ -197,12 +255,20 @@ async function collectMarketBundle(symbol, options = {}) {
 
   const bundle = normalizeMarketBundle({
     symbol,
-    coinex: includeResearch ? settled.coinex : null,
+    coinex: includeResearch ? coinex : null,
     binance: settled.binance,
     deribit: settled.deribit,
     bitunix: settled.bitunix,
     executionCompare,
     chart,
+  });
+
+  logger.info("Market bundle narrative status", {
+    symbol,
+    coinexAvailable: bundle.coinex?.available,
+    coinexFromCache: Boolean(bundle.coinex?.fromCache),
+    coinexLength: bundle.coinex?.text?.length || 0,
+    coinexError: bundle.coinex?.error || null,
   });
 
   bundle.promptText = bundleToPromptText(bundle);
@@ -213,4 +279,5 @@ module.exports = {
   collectMarketBundle,
   normalizeMarketBundle,
   bundleToPromptText,
+  collectCoinExResearch,
 };

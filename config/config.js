@@ -33,7 +33,9 @@ module.exports = {
   coinex: {
     baseUrl: "https://www.coinex.com/futures",
     symbols,
-    scrapeTimeoutMs: parsePositiveInteger(process.env.SCRAPE_TIMEOUT_MS, 30000),
+    scrapeTimeoutMs: parsePositiveInteger(process.env.SCRAPE_TIMEOUT_MS, 45000),
+    // Prefer EN futures page: https://www.coinex.com/en/futures/btc-usdt
+    preferredLocalePath: process.env.COINEX_FUTURES_PATH || "/en/futures",
   },
   scheduler: {
     // Intraday monitoring is off by default — daily setup chart at 03:30 is enough.
