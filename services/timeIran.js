@@ -28,6 +28,11 @@ function getIranDateString(date = new Date()) {
   return getIranParts(date).date;
 }
 
+function getIranDateDaysAgo(days = 1, fromDate = new Date()) {
+  const ms = Math.max(0, Number(days) || 0) * 24 * 60 * 60 * 1000;
+  return getIranDateString(new Date(fromDate.getTime() - ms));
+}
+
 function formatIranClock(date = new Date()) {
   const p = getIranParts(date);
   return `${String(p.hour).padStart(2, "0")}:${String(p.minute).padStart(2, "0")}`;
@@ -60,6 +65,7 @@ module.exports = {
   IRAN_TZ,
   getIranParts,
   getIranDateString,
+  getIranDateDaysAgo,
   formatIranClock,
   nextIranDailyCutoffIso,
 };

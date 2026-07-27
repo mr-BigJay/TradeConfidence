@@ -32,11 +32,13 @@ function normalizeMarketBundle({
       ? {
           source: coinex.source || "coinex",
           role: "market_narrative",
-          available: Boolean(coinex.text && String(coinex.text).trim().length > 40),
+          available: Boolean(coinex.text && String(coinex.text).trim().length > 40 && !coinex.stale),
           text: coinex.text || "",
           url: coinex.url || null,
           scrapedAt: coinex.datetime || coinex.scrapedAt || null,
           fromCache: Boolean(coinex.fromCache),
+          stale: Boolean(coinex.stale),
+          cacheAgeHours: coinex.cacheAgeHours ?? null,
           error: coinex.error || null,
         }
       : { source: "coinex", role: "market_narrative", available: false, text: "" },
@@ -105,6 +107,16 @@ function bundleToPromptText(bundle) {
   return [
     "=== CoinEx Narrative (PRIMARY TEXT ANALYSIS — use this if present) ===",
     narrative,
+    bundle.coinex?.stale
+      ? `NOTE: CoinEx cache is STALE (${bundle.coinex.cacheAgeHours ?? "?"}h). Prefer Futures/Options/Chart for bias.`
+      : null,
+    "",
+    "=== Daily Candle Outlook (PRIMARY USER SIGNAL) ===",
+    bundle.chart?.day_outlook?.summary_fa ||
+      "Day outlook unavailable. Estimate green/red next daily candle from HTF structure + closed 1D + OI/Funding.",
+    bundle.chart?.day_outlook
+      ? `Closed=${bundle.chart.day_outlook.closed_candle?.color_fa || "n/a"} | Next≈${bundle.chart.day_outlook.expected_day_candle_fa} | Conf=${bundle.chart.day_outlook.confidence}%`
+      : null,
     "",
     "=== Binance Futures Reference ===",
     bundle.futures?.checklistText || "Binance futures unavailable",
@@ -124,19 +136,36 @@ function bundleToPromptText(bundle) {
     "=== Chart Setup Rule ===",
     bundle.chart?.setup?.rule ||
       "Pattern alone never creates a trade. Need Market + Technical + Risk confirmations.",
-  ].join("\n");
+  ]
+    .filter((line) => line != null && line !== "")
+    .join("\n");
 }
 
 async function loadCachedResearch(symbol) {
   try {
     const latest = await getLatestContent(symbol);
     if (!latest?.raw_text || String(latest.raw_text).trim().length < 80) return null;
+    const scrapedAtMs = latest.scraped_at ? Date.parse(latest.scraped_at) : NaN;
+    const maxAgeMs = Number(process.env.COINEX_CACHE_MAX_AGE_HOURS || 18) * 60 * 60 * 1000;
+    const ageMs = Number.isFinite(scrapedAtMs) ? Date.now() - scrapedAtMs : Infinity;
+    const stale = ageMs > maxAgeMs;
+    if (stale) {
+      logger.warn("Cached CoinEx research is stale", {
+        symbol,
+        scrapedAt: latest.scraped_at,
+        ageHours: Number.isFinite(ageMs) ? Number((ageMs / 3600000).toFixed(1)) : null,
+        maxAgeHours: maxAgeMs / 3600000,
+      });
+    }
     return {
       source: "coinex_cache",
       text: latest.raw_text,
       datetime: latest.scraped_at || null,
       url: null,
       fromCache: true,
+      stale,
+      // Stale cache is usable as fallback text but marked unavailable for scoring coverage.
+      cacheAgeHours: Number.isFinite(ageMs) ? Number((ageMs / 3600000).toFixed(1)) : null,
     };
   } catch (error) {
     logger.warn("Failed loading cached CoinEx research", { symbol, error: error.message });

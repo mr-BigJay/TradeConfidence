@@ -27,8 +27,9 @@ function scoreOi(oi) {
 
 function scoreCvd(cvd) {
   if (!cvd) return 0;
-  if (cvd.bias === "buy_pressure") return 1;
-  if (cvd.bias === "sell_pressure") return -1;
+  // Soft weight: micro CVD must not dominate daily validation.
+  if (cvd.bias === "buy_pressure") return 0.35;
+  if (cvd.bias === "sell_pressure") return -0.35;
   return 0;
 }
 

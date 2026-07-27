@@ -4,6 +4,8 @@
  * Pattern alone never creates a trade; setup requires market + technical + risk confirmations.
  */
 
+const { buildDayOutlook } = require("../dayOutlook");
+
 function round(value, digits = 2) {
   if (value === null || value === undefined || !Number.isFinite(Number(value))) return null;
   return Number(Number(value).toFixed(digits));
@@ -887,7 +889,7 @@ function buildLevelPlan({
   });
 }
 
-function buildChartSetup({ htf, ltf, futuresContext = {} }) {
+function buildChartSetup({ htf, ltf, futuresContext = {}, dayOutlook = null }) {
   const marketConfirmation = {
     funding: futuresContext.fundingRatePercent ?? null,
     oiTrend: futuresContext.openInterest?.trend ?? null,
@@ -895,21 +897,37 @@ function buildChartSetup({ htf, ltf, futuresContext = {} }) {
     volume: ltf.volume?.confirmation ?? null,
     passed: false,
     reasons: [],
+    directional_reasons: [],
   };
 
-  if (futuresContext.cvd?.bias === "buy_pressure" || futuresContext.cvd?.bias === "sell_pressure") {
-    marketConfirmation.reasons.push(`CVD=${futuresContext.cvd.bias}`);
-  }
-  if (futuresContext.openInterest?.trend && futuresContext.openInterest.trend !== "flat") {
-    marketConfirmation.reasons.push(`OI=${futuresContext.openInterest.trend}`);
-  }
-  if (ltf.volume?.confirmation === "trend_confirmed" || ltf.volume?.breakoutVolume) {
-    marketConfirmation.reasons.push(`Volume=${ltf.volume.confirmation}`);
-  }
+  // Soft / non-directional context (never enough alone).
   if (Math.abs(futuresContext.fundingRatePercent ?? 0) < 0.08) {
     marketConfirmation.reasons.push("Funding not extreme");
   }
-  marketConfirmation.passed = marketConfirmation.reasons.length >= 2;
+
+  // Directional market evidence.
+  if (futuresContext.openInterest?.trend && futuresContext.openInterest.trend !== "flat") {
+    marketConfirmation.reasons.push(`OI=${futuresContext.openInterest.trend}`);
+    marketConfirmation.directional_reasons.push(`OI=${futuresContext.openInterest.trend}`);
+  }
+  if (ltf.volume?.confirmation === "trend_confirmed" || ltf.volume?.breakoutVolume) {
+    marketConfirmation.reasons.push(`Volume=${ltf.volume.confirmation}`);
+    marketConfirmation.directional_reasons.push(`Volume=${ltf.volume.confirmation}`);
+  }
+  if (dayOutlook?.expected_day_candle === "green" || dayOutlook?.expected_day_candle === "red") {
+    marketConfirmation.reasons.push(`DayOutlook=${dayOutlook.expected_day_candle}`);
+    marketConfirmation.directional_reasons.push(`DayOutlook=${dayOutlook.expected_day_candle}`);
+  }
+  // Micro CVD is supporting only when already have another directional reason.
+  if (
+    (futuresContext.cvd?.bias === "buy_pressure" || futuresContext.cvd?.bias === "sell_pressure") &&
+    marketConfirmation.directional_reasons.length >= 1
+  ) {
+    marketConfirmation.reasons.push(`CVD soft=${futuresContext.cvd.bias}`);
+  }
+
+  marketConfirmation.passed =
+    marketConfirmation.directional_reasons.length >= 1 && marketConfirmation.reasons.length >= 2;
 
   const technicalConfirmation = {
     structure: htf.structure?.structure ?? null,
@@ -918,41 +936,56 @@ function buildChartSetup({ htf, ltf, futuresContext = {} }) {
     supportReaction: null,
     passed: false,
     reasons: [],
+    directional_reasons: [],
   };
 
-  if (/Bullish/i.test(htf.structure?.structure || "")) technicalConfirmation.reasons.push("HTF bullish structure");
-  if (/Bearish/i.test(htf.structure?.structure || "")) technicalConfirmation.reasons.push("HTF bearish structure");
+  if (/Bullish/i.test(htf.structure?.structure || "")) {
+    technicalConfirmation.reasons.push("HTF bullish structure");
+    technicalConfirmation.directional_reasons.push("HTF bullish structure");
+  }
+  if (/Bearish/i.test(htf.structure?.structure || "")) {
+    technicalConfirmation.reasons.push("HTF bearish structure");
+    technicalConfirmation.directional_reasons.push("HTF bearish structure");
+  }
   if (htf.indicators?.trend === "Bullish" || htf.indicators?.trend === "Bearish") {
     technicalConfirmation.reasons.push(`HTF trend=${htf.indicators.trend}`);
+    technicalConfirmation.directional_reasons.push(`HTF trend=${htf.indicators.trend}`);
+  }
+  if (htf.indicators?.emaStack === "bullish_stack" || htf.indicators?.emaStack === "bearish_stack") {
+    technicalConfirmation.reasons.push(`EMA stack=${htf.indicators.emaStack}`);
+    technicalConfirmation.directional_reasons.push(`EMA stack=${htf.indicators.emaStack}`);
   }
   if (/Transition|Range/i.test(htf.structure?.structure || "")) {
     technicalConfirmation.reasons.push(`HTF structure=${htf.structure.structure}`);
   }
-  if (ltf.patterns?.[0]) technicalConfirmation.reasons.push(`Pattern=${ltf.patterns[0].name}`);
+  if (ltf.patterns?.[0] && Number(ltf.patterns[0].confidence || 0) >= 70) {
+    technicalConfirmation.reasons.push(`Pattern=${ltf.patterns[0].name}`);
+  }
   if (ltf.indicators?.rsiState === "oversold" || ltf.indicators?.rsiState === "overbought") {
     technicalConfirmation.reasons.push(`RSI=${ltf.indicators.rsiState}`);
   }
   if (ltf.indicators?.rsiDivergence && ltf.indicators.rsiDivergence !== "none") {
     technicalConfirmation.reasons.push(`RSI divergence=${ltf.indicators.rsiDivergence}`);
+    technicalConfirmation.directional_reasons.push(`RSI divergence=${ltf.indicators.rsiDivergence}`);
   }
   if (ltf.indicators?.macd?.cross && ltf.indicators.macd.cross !== "none") {
     technicalConfirmation.reasons.push(`MACD=${ltf.indicators.macd.cross}`);
+    technicalConfirmation.directional_reasons.push(`MACD=${ltf.indicators.macd.cross}`);
   }
   if (ltf.indicators?.stochState === "oversold" || ltf.indicators?.stochState === "overbought") {
     technicalConfirmation.reasons.push(`StochRSI timing=${ltf.indicators.stochState}`);
   }
-  if (htf.indicators?.emaStack === "bullish_stack" || htf.indicators?.emaStack === "bearish_stack") {
-    technicalConfirmation.reasons.push(`EMA stack=${htf.indicators.emaStack}`);
-  }
   if (htf.levels?.majorSupport?.[0] && htf.levels?.majorResistance?.[0]) {
     technicalConfirmation.reasons.push("S/R mapped");
   }
-  // Pattern alone is listed but cannot be the only technical reason for a directional trade.
+
+  // Need directional technical evidence; pattern / S/R mapped alone are not enough.
   const nonPatternReasons = technicalConfirmation.reasons.filter(
     (reason) => !String(reason).startsWith("Pattern="),
   );
   technicalConfirmation.passed =
-    technicalConfirmation.reasons.length >= 2 && nonPatternReasons.length >= 1;
+    technicalConfirmation.directional_reasons.length >= 1 &&
+    nonPatternReasons.length >= 2;
 
   const price = ltf.price;
   const majorSupport = htf.levels?.majorSupport?.[0] || ltf.levels?.majorSupport?.[0];
@@ -965,11 +998,15 @@ function buildChartSetup({ htf, ltf, futuresContext = {} }) {
   const bullishVotes =
     (/Bullish/i.test(htf.structure?.structure || "") ? 1 : 0) +
     (htf.indicators?.trend === "Bullish" ? 1 : 0) +
-    (futuresContext.cvd?.bias === "buy_pressure" ? 1 : 0);
+    (htf.indicators?.emaStack === "bullish_stack" ? 1 : 0) +
+    (dayOutlook?.expected_day_candle === "green" ? 1 : 0) +
+    (futuresContext.openInterest?.trend === "up" && dayOutlook?.expected_day_candle === "green" ? 1 : 0);
   const bearishVotes =
     (/Bearish/i.test(htf.structure?.structure || "") ? 1 : 0) +
     (htf.indicators?.trend === "Bearish" ? 1 : 0) +
-    (futuresContext.cvd?.bias === "sell_pressure" ? 1 : 0);
+    (htf.indicators?.emaStack === "bearish_stack" ? 1 : 0) +
+    (dayOutlook?.expected_day_candle === "red" ? 1 : 0) +
+    (futuresContext.openInterest?.trend === "up" && dayOutlook?.expected_day_candle === "red" ? 1 : 0);
 
   if (bullishVotes > bearishVotes && bullishVotes >= 2 && bearishVotes === 0) direction = "LONG";
   else if (bearishVotes > bullishVotes && bearishVotes >= 2 && bullishVotes === 0) direction = "SHORT";
@@ -984,7 +1021,11 @@ function buildChartSetup({ htf, ltf, futuresContext = {} }) {
           ? "Bearish"
           : bullishVotes > bearishVotes
             ? "Bullish"
-            : "Neutral";
+            : dayOutlook?.expected_day_candle === "green"
+              ? "Bullish"
+              : dayOutlook?.expected_day_candle === "red"
+                ? "Bearish"
+                : "Neutral";
 
   // Pattern alone cannot force direction if confirmations fail.
   const bothConfirmed = marketConfirmation.passed && technicalConfirmation.passed;
@@ -1054,7 +1095,8 @@ function buildChartSetup({ htf, ltf, futuresContext = {} }) {
     market_confirmation: marketConfirmation,
     technical_confirmation: technicalConfirmation,
     risk_management: riskManagement,
-    rule: "Pattern alone never creates a trade. Need Market + Technical + Risk confirmations for directional entry. RANGE days still publish S/R-based Entry/TP/SL for the chart.",
+    monitoring_only: !tradeAllowed,
+    rule: "Pattern alone never creates a trade. Need Market + Technical + Risk confirmations for directional entry. RANGE days still publish S/R-based Entry/TP/SL for monitoring only (not a trade signal).",
   };
 }
 
@@ -1120,12 +1162,24 @@ function analyzeChartIntelligence(candlesByTf = {}, futuresContext = {}) {
     price: analyzed["15m"].price || analyzed["1h"].price || analyzed["5m"].price || htf.price,
   };
 
+  const topPattern = [...(analyzed["4h"].patterns || []), ...(analyzed["1h"].patterns || [])].sort(
+    (a, b) => b.confidence - a.confidence,
+  )[0];
+
+  const dayOutlookSeed = buildDayOutlook({
+    dailyCandles: candlesByTf["1d"] || [],
+    chart: { htf, ltf, top_pattern: topPattern || null },
+    futures: futuresContext,
+    options: futuresContext.options || {},
+    validation: futuresContext.validation || {},
+  });
+
   const liquidity = analyzeLiquidity(
     candlesByTf["15m"] || candlesByTf["1h"] || [],
     htf.levels || {},
     futuresContext,
   );
-  const setup = buildChartSetup({ htf, ltf, futuresContext });
+  const setup = buildChartSetup({ htf, ltf, futuresContext, dayOutlook: dayOutlookSeed });
 
   const multiTfSummary = {
     "1d": analyzed["1d"].indicators?.trend || analyzed["1d"].structure?.structure || "n/a",
@@ -1135,13 +1189,10 @@ function analyzeChartIntelligence(candlesByTf = {}, futuresContext = {}) {
     "5m": analyzed["5m"].indicators?.stochState || analyzed["5m"].indicators?.trend || "n/a",
   };
 
-  const topPattern = [...(analyzed["4h"].patterns || []), ...(analyzed["1h"].patterns || [])].sort(
-    (a, b) => b.confidence - a.confidence,
-  )[0];
-
   const checklistText = [
     "Source: Chart Intelligence (Binance candles)",
     `MTF: 1D=${multiTfSummary["1d"]} | 4H=${multiTfSummary["4h"]} | 1H=${multiTfSummary["1h"]} | 15M=${multiTfSummary["15m"]} | 5M=${multiTfSummary["5m"]}`,
+    `Day Outlook: closed=${dayOutlookSeed.closed_candle?.color_fa || "n/a"} | next≈${dayOutlookSeed.expected_day_candle_fa} (${dayOutlookSeed.confidence}%)`,
     `Structure: ${htf.structure?.structure || "n/a"} (${htf.structure?.detail || ""})`,
     `Major Support: ${(htf.levels?.majorSupport || []).join(", ") || "n/a"}`,
     `Major Resistance: ${(htf.levels?.majorResistance || []).join(", ") || "n/a"}`,
@@ -1153,7 +1204,7 @@ function analyzeChartIntelligence(candlesByTf = {}, futuresContext = {}) {
     `Fib 0.618: ${htf.fibonacci?.levels?.["0.618"] ?? "n/a"} | Liquidity: ${liquidity.state} pools=${(liquidity.liquidity_pools || []).length}`,
     `Setup: ${setup.direction} allowed=${setup.trade_allowed} marketOK=${setup.market_confirmation.passed} techOK=${setup.technical_confirmation.passed} riskOK=${setup.risk_management.passed}`,
     `Entry=${setup.risk_management.entry || "n/a"} SL=${setup.risk_management.stop_loss || "n/a"} TP1=${setup.risk_management.tp1 || "n/a"} RR=${setup.risk_management.risk_reward || "n/a"}`,
-    "Rule: Pattern alone never creates a trade. Need Market + Technical + Risk.",
+    "Rule: Pattern alone never creates a trade. Need Market + Technical + Risk. RANGE levels are monitoring-only.",
   ].join("\n");
 
   return {
@@ -1162,6 +1213,7 @@ function analyzeChartIntelligence(candlesByTf = {}, futuresContext = {}) {
     available: Object.values(analyzed).some((item) => item.available),
     multi_timeframe: multiTfSummary,
     session_levels: sessionLevels,
+    day_outlook: dayOutlookSeed,
     timeframes: analyzed,
     htf,
     ltf,

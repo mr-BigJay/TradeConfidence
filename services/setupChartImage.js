@@ -367,8 +367,13 @@ function formatSetupChartCaption(plan, meta = {}) {
   return [
     "چارت ستاپ روزانه BTC",
     meta.iranDate ? `تاریخ: ${meta.iranDate}` : null,
+    `سناریوی کندل روز: ${plan.day_outlook_fa || meta.engineScore?.day_outlook?.expected_day_candle_fa || "خنثی"} (${plan.day_outlook_confidence ?? meta.engineScore?.day_outlook?.confidence ?? plan.confidence ?? 0}%)`,
+    plan.closed_daily_candle?.color_fa || meta.engineScore?.day_outlook?.closed_candle?.color_fa
+      ? `کندل بسته‌شده: ${plan.closed_daily_candle?.color_fa || meta.engineScore.day_outlook.closed_candle.color_fa}`
+      : null,
     `بایاس: ${plan.bias || "Neutral"} | ${plan.direction || "RANGE"} | ${plan.confidence ?? 0}%`,
     styleNote,
+    plan.trade_allowed === false ? "وضعیت: فقط رصد (Monitoring Only)" : null,
     `ورود: ${plan.entry || "-"}`,
     `حد سود: TP1 ${plan.tp1 || "-"} | TP2 ${plan.tp2 || "-"} | TP3 ${plan.tp3 || "-"}`,
     `حد ضرر: ${plan.stop_loss || "-"} | نسبت سود به زیان: ${plan.risk_reward || "-"}`,

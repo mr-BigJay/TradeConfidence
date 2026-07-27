@@ -1,4 +1,5 @@
 const { validateCoinexAgainstMarket } = require("./validationEngine");
+const { buildDayOutlook } = require("../dayOutlook");
 
 function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
@@ -7,6 +8,7 @@ function clamp(value, min, max) {
 /**
  * Weighted scoring aligned with the desk model:
  * CoinEx + Futures + Options + Technical + Pattern - Risk
+ * Primary user-facing signal: expected next daily candle (green/red).
  */
 function scoreMarketBundle(bundle) {
   const validation = validateCoinexAgainstMarket(bundle);
@@ -16,6 +18,35 @@ function scoreMarketBundle(bundle) {
   const chart = bundle.chart || {};
   const setup = chart.setup || {};
 
+  const dayOutlook = buildDayOutlook({
+    dailyCandles: (() => {
+      const closed = chart.day_outlook?.closed_candle;
+      if (closed && Number.isFinite(closed.open) && Number.isFinite(closed.close)) {
+        return [
+          { ...closed, time: Number(closed.time || Date.now() - 24 * 60 * 60 * 1000) },
+          {
+            open: closed.close,
+            high: closed.close,
+            low: closed.close,
+            close: closed.close,
+            time: Date.now(),
+          },
+        ];
+      }
+      return [];
+    })(),
+    chart,
+    futures,
+    options,
+    validation,
+  });
+
+  // Prefer richer closed-candle metadata from chart intelligence when present.
+  const refinedOutlook = {
+    ...dayOutlook,
+    closed_candle: chart.day_outlook?.closed_candle || dayOutlook.closed_candle,
+  };
+
   // Component scores on a 0-100-ish contribution scale used in final blend.
   let coinexScore = 0;
   if (validation.coinexClaimedBias === "bullish") coinexScore += 12;
@@ -23,16 +54,18 @@ function scoreMarketBundle(bundle) {
   if (validation.status === "Confirmed") coinexScore += 8;
   if (validation.status === "Contradicted") coinexScore -= 8;
   if (validation.status === "Partially Confirmed") coinexScore += 3;
+  if (bundle.coinex?.stale) coinexScore -= 4;
 
   let futuresScore = 0;
-  if (futures.cvd?.bias === "buy_pressure") futuresScore += 10;
-  if (futures.cvd?.bias === "sell_pressure") futuresScore -= 10;
-  if (futures.openInterest?.trend === "up") futuresScore += 6;
-  if (futures.openInterest?.trend === "down") futuresScore -= 4;
-  if ((futures.fundingRatePercent ?? 0) < -0.02) futuresScore += 4;
+  // Micro CVD is soft (was ±10).
+  if (futures.cvd?.bias === "buy_pressure") futuresScore += 3;
+  if (futures.cvd?.bias === "sell_pressure") futuresScore -= 3;
+  if (futures.openInterest?.trend === "up") futuresScore += 8;
+  if (futures.openInterest?.trend === "down") futuresScore -= 5;
+  if ((futures.fundingRatePercent ?? 0) < -0.02) futuresScore += 5;
   if ((futures.fundingRatePercent ?? 0) > 0.05) futuresScore -= 5;
-  if ((futures.takerBuySellRatio ?? 1) > 1.1) futuresScore += 4;
-  if ((futures.takerBuySellRatio ?? 1) < 0.9) futuresScore -= 4;
+  if ((futures.takerBuySellRatio ?? 1) > 1.1) futuresScore += 3;
+  if ((futures.takerBuySellRatio ?? 1) < 0.9) futuresScore -= 3;
   if ((futures.change24hPercent ?? 0) > 1.5) futuresScore += 3;
   if ((futures.change24hPercent ?? 0) < -1.5) futuresScore -= 3;
 
@@ -68,15 +101,23 @@ function scoreMarketBundle(bundle) {
   if (chart.ltf?.volume?.confirmation === "weak_rally") technicalScore -= 2;
   if (setup.technical_confirmation?.passed) technicalScore += 5;
   if (setup.market_confirmation?.passed) technicalScore += 3;
+  if (refinedOutlook.expected_day_candle === "green") technicalScore += 4;
+  if (refinedOutlook.expected_day_candle === "red") technicalScore -= 4;
 
   let patternScore = 0;
   const pattern = chart.top_pattern;
-  if (pattern) {
+  if (pattern && Number(pattern.confidence || 0) >= 70) {
     const bullishPattern = /bull|bottom|inverse|falling wedge|ascending/i.test(pattern.name);
     const bearishPattern = /bear|top|head and shoulders|rising wedge|descending/i.test(pattern.name);
-    const weight = Math.round((pattern.confidence || 50) / 10); // ~5-8
-    if (bullishPattern) patternScore += Math.min(10, weight);
-    if (bearishPattern) patternScore -= Math.min(10, weight);
+    const alignedBull = bullishPattern && (/Bullish/i.test(htfStructure) || htfTrend === "Bullish");
+    const alignedBear = bearishPattern && (/Bearish/i.test(htfStructure) || htfTrend === "Bearish");
+    const weight = Math.round((pattern.confidence || 50) / 20); // ~3-4 max soft weight
+    if (alignedBull) patternScore += Math.min(6, weight);
+    else if (alignedBear) patternScore -= Math.min(6, weight);
+    else if (bullishPattern || bearishPattern) {
+      // Misaligned / standalone pattern: tiny noise only.
+      patternScore += bullishPattern ? 1 : -1;
+    }
   }
 
   let riskPenalty = 0;
@@ -85,7 +126,8 @@ function scoreMarketBundle(bundle) {
   if (chart.liquidity?.fake_breakout_risk) riskPenalty += 3;
   if (!futures.available) riskPenalty += 6;
   if (!chart.available) riskPenalty += 4;
-  if (setup.trade_allowed === false && setup.direction === "RANGE") riskPenalty += 2;
+  if (bundle.coinex?.stale) riskPenalty += 3;
+  if (setup.trade_allowed === false && setup.direction === "RANGE") riskPenalty += 1;
 
   const fundingDiv = execution.compare?.fundingDivergencePercent;
   if (fundingDiv !== null && fundingDiv !== undefined) {
@@ -97,7 +139,9 @@ function scoreMarketBundle(bundle) {
     coinexScore + futuresScore + optionsScore + technicalScore + patternScore - riskPenalty;
 
   let bias = "Neutral";
-  if (net >= 12) bias = "Bullish";
+  if (refinedOutlook.expected_day_candle === "green") bias = "Bullish";
+  else if (refinedOutlook.expected_day_candle === "red") bias = "Bearish";
+  else if (net >= 12) bias = "Bullish";
   else if (net <= -12) bias = "Bearish";
 
   // Prefer chart setup direction only when confirmations passed.
@@ -105,7 +149,7 @@ function scoreMarketBundle(bundle) {
   if (setup.trade_allowed && setup.direction === "SHORT") bias = "Bearish";
 
   const dataCoverage =
-    (bundle.coinex?.available ? 1 : 0) +
+    (bundle.coinex?.available && !bundle.coinex?.stale ? 1 : 0) +
     (futures.available ? 1 : 0) +
     (options.available ? 1 : 0) +
     (execution.available ? 1 : 0) +
@@ -113,11 +157,12 @@ function scoreMarketBundle(bundle) {
 
   const confidence = clamp(
     Math.round(
-      50 +
-        Math.abs(net) * 0.7 +
+      48 +
+        Math.abs(net) * 0.65 +
         dataCoverage * 4 +
         (validation.status === "Confirmed" ? 6 : validation.status === "Contradicted" ? -6 : 0) +
-        (setup.trade_allowed ? 5 : 0) -
+        (setup.trade_allowed ? 4 : 0) +
+        Math.round((refinedOutlook.confidence || 50) * 0.12) -
         riskPenalty,
     ),
     20,
@@ -165,6 +210,7 @@ function scoreMarketBundle(bundle) {
     components,
     validation,
     data_coverage: dataCoverage,
+    day_outlook: refinedOutlook,
     chart_snapshot: chart.available
       ? {
           available: true,
@@ -173,12 +219,14 @@ function scoreMarketBundle(bundle) {
           ltf: chart.ltf || null,
           top_pattern: chart.top_pattern || null,
           liquidity: chart.liquidity || null,
+          day_outlook: refinedOutlook,
         }
       : { available: false },
     chart_setup: {
       direction: setup.direction || "RANGE",
       trade_allowed: Boolean(setup.trade_allowed),
       levels_ready: Boolean(setup.levels_ready || setup.risk_management?.passed),
+      monitoring_only: Boolean(setup.monitoring_only ?? !setup.trade_allowed),
       entry: setup.risk_management?.entry || null,
       stop_loss: setup.risk_management?.stop_loss || null,
       tp1: setup.risk_management?.tp1 || null,

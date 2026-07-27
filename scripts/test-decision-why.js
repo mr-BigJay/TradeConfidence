@@ -24,8 +24,8 @@ const lines = buildDecisionWhy(plan, {
   components: { futures: -4, technical: 8 },
 });
 assert.equal(lines.length, 2);
-assert.match(lines[0], /بایاس نزولی|رنج|فروش/);
-assert.match(lines[1], /ورود|SL|تأیید/);
+assert.match(lines[0], /سناریوی روز|رصد|Monitoring|نزولی|قرمز/);
+assert.match(lines[1], /ورود|SL|تأیید|رصد|کندل/);
 
 const block = formatDecisionWhyBlock(plan, {});
 assert.match(block, /دلیل تصمیم/);

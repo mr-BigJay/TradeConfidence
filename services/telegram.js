@@ -310,6 +310,22 @@ function formatDailyTradingPlanMessage(plan, meta = {}) {
       : null,
     "",
     "========================",
+    "سناریوی کندل روز",
+    "========================",
+    `کندل بسته‌شده دیروز: ${plan.closed_daily_candle?.color_fa || meta.engineScore?.day_outlook?.closed_candle?.color_fa || "-"}`,
+    `پیش‌بینی کندل امروز: ${plan.day_outlook_fa || meta.engineScore?.day_outlook?.expected_day_candle_fa || "خنثی"}`,
+    `اطمینان سناریو: ${plan.day_outlook_confidence ?? meta.engineScore?.day_outlook?.confidence ?? plan.confidence ?? 0}%`,
+    plan.day_outlook_summary ||
+      meta.engineScore?.day_outlook?.summary_fa ||
+      "سناریوی کندل روز در دسترس نیست",
+    ...(Array.isArray(plan.day_outlook_reasons) && plan.day_outlook_reasons.length
+      ? plan.day_outlook_reasons.slice(0, 5).map((item) => `• ${item}`)
+      : (meta.engineScore?.day_outlook?.reasons || []).slice(0, 5).map((item) => `• ${item}`)),
+    plan.previous_outlook_result?.note_fa
+      ? `نتیجه پیش‌بینی دیروز: ${plan.previous_outlook_result.note_fa}`
+      : null,
+    "",
+    "========================",
     "Narrative Analysis",
     "========================",
     plan.coinex_summary || plan.main_scenario || "-",
@@ -355,7 +371,10 @@ function formatDailyTradingPlanMessage(plan, meta = {}) {
     "========================",
     `Direction: ${plan.direction || "-"}`,
     plan.trade_allowed === false && plan.direction === "RANGE"
-      ? "Note: جهت‌گیری قطعی نیست؛ فقط سطوح رنج برای رصد"
+      ? "⚠️ فقط رصد (Monitoring Only) — سیگنال معامله جهتی نیست"
+      : null,
+    plan.trade_allowed === false && plan.direction === "RANGE"
+      ? "Note: سطوح Entry/TP/SL برای مدیریت ریسک رنج منتشر شده‌اند، نه به‌عنوان پوزیشن فعال"
       : null,
     `Entry Zone: ${plan.entry || "-"}`,
     `TP1: ${plan.tp1 || "-"}`,

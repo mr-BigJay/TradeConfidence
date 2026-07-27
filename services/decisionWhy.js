@@ -12,6 +12,7 @@ function buildDecisionWhy(plan = {}, engineScore = {}) {
   const setup = engineScore.chart_setup || {};
   const validation = engineScore.validation || {};
   const components = engineScore.components || {};
+  const outlook = engineScore.day_outlook || {};
   const direction = String(plan.direction || "RANGE").toUpperCase();
   const bias = plan.bias || "Neutral";
   const confidence = plan.confidence ?? engineScore.confidence ?? 0;
@@ -22,31 +23,33 @@ function buildDecisionWhy(plan = {}, engineScore = {}) {
   const techOk = setup.technical_confirmation ? "تکنیکال تأیید" : "تکنیکال ناقص";
   const tradeYes = Boolean(plan.trade_allowed || setup.trade_allowed);
   const validationStatus = plan.coinex_validation_status || validation.status || "Partially Confirmed";
+  const dayFa =
+    plan.day_outlook_fa ||
+    outlook.expected_day_candle_fa ||
+    (plan.day_outlook === "green" ? "سبز" : plan.day_outlook === "red" ? "قرمز" : "خنثی");
+  const closedFa =
+    plan.closed_daily_candle?.color_fa || outlook.closed_candle?.color_fa || "-";
 
   let line1;
   let line2;
 
   if (tradeYes && direction === "LONG") {
-    line1 = `این پوزیشن LONG انتخاب شد چون ${marketOk} و ${techOk} با بایاس صعودی هم‌راستا بودند (Trade=YES، اطمینان ${confidence}%).`;
-    line2 = `ورود روی واکنش حمایت ${entry}، حد ضرر ${sl} و هدف اول ${tp1}؛ اعتبارسنجی روایت: ${validationStatus}.`;
+    line1 = `سناریوی روز: کندل احتمالاً ${dayFa}. پوزیشن LONG چون ${marketOk} و ${techOk} هم‌راستا بودند (اطمینان ${confidence}%).`;
+    line2 = `کندل بسته‌شده ${closedFa} بود؛ ورود ${entry} / SL ${sl} / TP1 ${tp1}؛ روایت: ${validationStatus}.`;
   } else if (tradeYes && direction === "SHORT") {
-    line1 = `این پوزیشن SHORT انتخاب شد چون ${marketOk} و ${techOk} با بایاس نزولی هم‌راستا بودند (Trade=YES، اطمینان ${confidence}%).`;
-    line2 = `ورود روی واکنش مقاومت ${entry}، حد ضرر ${sl} و هدف اول ${tp1}؛ اعتبارسنجی روایت: ${validationStatus}.`;
-  } else if (/bear/i.test(String(bias))) {
-    line1 =
-      "معامله جهتی قفل نشد؛ به‌خاطر بایاس نزولی فقط سطوح رنج با سبک فروشِ واکنش به مقاومت برای رصد منتشر شد.";
-    line2 = `دلیل: هنوز هر سه تأیید Market/Technical/Risk کامل نیست (${marketOk}، ${techOk}). ورود پیشنهادی ${entry} با SL ${sl} فقط برای مدیریت ریسک رنج است.`;
-  } else if (/bull/i.test(String(bias))) {
-    line1 =
-      "معامله جهتی قفل نشد؛ به‌خاطر بایاس صعودی فقط سطوح رنج با سبک خریدِ واکنش به حمایت برای رصد منتشر شد.";
-    line2 = `دلیل: هنوز هر سه تأیید Market/Technical/Risk کامل نیست (${marketOk}، ${techOk}). ورود پیشنهادی ${entry} با SL ${sl} فقط برای مدیریت ریسک رنج است.`;
+    line1 = `سناریوی روز: کندل احتمالاً ${dayFa}. پوزیشن SHORT چون ${marketOk} و ${techOk} هم‌راستا بودند (اطمینان ${confidence}%).`;
+    line2 = `کندل بسته‌شده ${closedFa} بود؛ ورود ${entry} / SL ${sl} / TP1 ${tp1}؛ روایت: ${validationStatus}.`;
+  } else if (/bear/i.test(String(bias)) || dayFa === "قرمز") {
+    line1 = `سناریوی روز: کندل احتمالاً ${dayFa}. معامله جهتی قفل نشد؛ فقط سطوح رصد (Monitoring Only) منتشر شد.`;
+    line2 = `دلیل: تأیید کامل Market/Technical/Risk نیست (${marketOk}، ${techOk}). کندل بسته‌شده ${closedFa}؛ سطوح ${entry} فقط برای رصد است.`;
+  } else if (/bull/i.test(String(bias)) || dayFa === "سبز") {
+    line1 = `سناریوی روز: کندل احتمالاً ${dayFa}. معامله جهتی قفل نشد؛ فقط سطوح رصد (Monitoring Only) منتشر شد.`;
+    line2 = `دلیل: تأیید کامل Market/Technical/Risk نیست (${marketOk}، ${techOk}). کندل بسته‌شده ${closedFa}؛ سطوح ${entry} فقط برای رصد است.`;
   } else {
-    line1 =
-      "بازار خنثی/رنج تشخیص داده شد و پوزیشن LONG/SHORT صادر نشد چون تأیید کامل معامله وجود نداشت.";
-    line2 = `سطوح ${entry} تا ${tp1} فقط نقشهٔ رصد روز هستند؛ Score فعلی حدود ${confidence}% و وضعیت روایت ${validationStatus} است.`;
+    line1 = `سناریوی روز خنثی است و پوزیشن LONG/SHORT صادر نشد (کندل بسته‌شده: ${closedFa}).`;
+    line2 = `سطوح ${entry} تا ${tp1} فقط نقشهٔ رصد هستند؛ Score حدود ${confidence}% و روایت ${validationStatus}.`;
   }
 
-  // Optional tiny score hint if useful and short.
   if (components && (components.futures !== undefined || components.technical !== undefined)) {
     const hint = `Futures ${components.futures ?? "-"} / Tech ${components.technical ?? "-"}`;
     if (line2.length < 140) {

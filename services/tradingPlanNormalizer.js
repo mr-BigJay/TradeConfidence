@@ -247,6 +247,7 @@ function normalizeTradingPlan(symbol, raw, engine = {}) {
     bias,
     direction,
     trade_allowed: stance.trade_allowed,
+    monitoring_only: !stance.trade_allowed,
     confidence: stance.confidence,
     market_score: parsePercent(data.market_score, engine.market_score || stance.confidence || 50),
     market_regime: data.market_regime || engine.market_regime || "Range",
@@ -254,6 +255,22 @@ function normalizeTradingPlan(symbol, raw, engine = {}) {
       ? data.risk_level
       : engine.risk_level || "Medium",
     current_price: currentPrice,
+    day_outlook: engine.day_outlook?.expected_day_candle || data.day_outlook || "neutral",
+    day_outlook_fa:
+      engine.day_outlook?.expected_day_candle_fa ||
+      data.day_outlook_fa ||
+      (engine.day_outlook?.expected_day_candle === "green"
+        ? "سبز"
+        : engine.day_outlook?.expected_day_candle === "red"
+          ? "قرمز"
+          : "خنثی"),
+    day_outlook_confidence:
+      engine.day_outlook?.confidence ?? parsePercent(data.day_outlook_confidence, stance.confidence),
+    day_outlook_summary:
+      engine.day_outlook?.summary_fa || toAsciiDigits(data.day_outlook_summary || "").trim(),
+    closed_daily_candle: engine.day_outlook?.closed_candle || data.closed_daily_candle || null,
+    day_outlook_reasons: engine.day_outlook?.reasons || data.day_outlook_reasons || [],
+    previous_outlook_result: data.previous_outlook_result || engine.previous_outlook_result || null,
     coinex_summary: toAsciiDigits(data.coinex_summary || "").trim(),
     coinex_validation_status: asValidationStatus(
       data.coinex_validation_status,
