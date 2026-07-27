@@ -127,8 +127,14 @@ async function processIntradaySymbol(symbol, options = {}) {
     });
   }
 
-  await sendSetupUpdate(evaluation, dailySetup, {
+  const telegramResults = await sendSetupUpdate(evaluation, dailySetup, {
     clock: formatIranClock(),
+  });
+  const messageIds = telegramResults.map((item) => item?.result?.message_id).filter(Boolean);
+  logger.info("Telegram intraday update sent", {
+    symbol,
+    chunks: telegramResults.length,
+    messageIds,
   });
 
   await saveSetupEvaluation({
@@ -154,6 +160,11 @@ async function processIntradaySymbol(symbol, options = {}) {
     telegram_sent: true,
   });
 
+  await saveEvent({
+    symbol,
+    event: "telegram_success",
+    message: `Intraday telegram message_ids=${messageIds.join(",") || "n/a"}`,
+  });
   await saveEvent({
     symbol,
     event: "intraday_success",

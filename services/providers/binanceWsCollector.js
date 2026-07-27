@@ -6,7 +6,7 @@
  * Full persistence can be wired to SQLite tables when needed.
  */
 
-const logger = require("../logger");
+const logger = require("../../logger");
 
 const state = {
   enabled: false,

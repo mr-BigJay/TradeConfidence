@@ -65,6 +65,22 @@ async function runDailySetup(options = {}) {
         plan.coinex_validation_status || validation.status || "Partially Confirmed";
 
       const createdAt = new Date().toISOString();
+
+      const telegramResults = await sendDailyTradingPlan(plan, {
+        iranDate,
+        validation,
+        engineScore,
+      });
+      const messageIds = telegramResults
+        .map((item) => item?.result?.message_id)
+        .filter(Boolean);
+      logger.info("Telegram daily plan sent", {
+        symbol,
+        chunks: telegramResults.length,
+        messageIds,
+        chatId: config.telegram.chatId,
+      });
+
       const saved = await saveDailySetup({
         symbol,
         iran_date: iranDate,
@@ -103,12 +119,11 @@ async function runDailySetup(options = {}) {
         status: "Active",
       });
 
-      await sendDailyTradingPlan(plan, {
-        iranDate,
-        validation,
-        engineScore,
+      await saveEvent({
+        symbol,
+        event: "telegram_success",
+        message: `Daily plan telegram message_ids=${messageIds.join(",") || "n/a"}`,
       });
-
       await saveEvent({
         symbol,
         event: "daily_setup_success",

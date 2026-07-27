@@ -152,6 +152,11 @@ function formatCardCaption(analysis) {
 async function sendTelegramMessage(text) {
   requireTelegramConfig();
 
+  const cleaned = String(text || "").trim();
+  if (!cleaned) {
+    throw new Error("Telegram sendMessage refused empty text");
+  }
+
   const response = await fetch(
     `https://api.telegram.org/bot${config.telegram.botToken}/sendMessage`,
     {
@@ -159,7 +164,7 @@ async function sendTelegramMessage(text) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         chat_id: config.telegram.chatId,
-        text,
+        text: cleaned.slice(0, 4096),
         disable_web_page_preview: true,
       }),
     },
@@ -167,7 +172,9 @@ async function sendTelegramMessage(text) {
 
   const payload = await response.json();
   if (!payload.ok) {
-    throw new Error(`Telegram sendMessage failed: ${payload.description || response.status}`);
+    throw new Error(
+      `Telegram sendMessage failed: ${payload.description || response.status} (chat_id=${config.telegram.chatId})`,
+    );
   }
 
   return payload;
@@ -372,15 +379,25 @@ async function sendDailySetup(setup, meta = {}) {
 }
 
 async function sendDailyTradingPlan(plan, meta = {}) {
-  for (const chunk of splitTelegramText(formatDailyTradingPlanMessage(plan, meta))) {
-    await sendTelegramMessage(chunk);
+  const chunks = splitTelegramText(formatDailyTradingPlanMessage(plan, meta));
+  const results = [];
+  for (const chunk of chunks) {
+    results.push(await sendTelegramMessage(chunk));
   }
+  return results;
 }
 
 async function sendSetupUpdate(evaluation, setup, meta = {}) {
-  for (const chunk of splitTelegramText(formatSetupUpdateMessage(evaluation, setup, meta))) {
-    await sendTelegramMessage(chunk);
+  const chunks = splitTelegramText(formatSetupUpdateMessage(evaluation, setup, meta));
+  const results = [];
+  for (const chunk of chunks) {
+    results.push(await sendTelegramMessage(chunk));
   }
+  return results;
+}
+
+async function sendTelegramTest(text = "BTC Analyzer test message ✅") {
+  return sendTelegramMessage(text);
 }
 
 module.exports = {
@@ -395,4 +412,5 @@ module.exports = {
   sendSetupUpdate,
   sendTelegramMessage,
   sendTelegramPhoto,
+  sendTelegramTest,
 };
