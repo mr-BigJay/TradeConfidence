@@ -2,7 +2,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const config = require("../config/config");
 const { clipText } = require("./numberFormat");
-const { formatDecisionWhyBlock } = require("./decisionWhy");
+const { buildDecisionWhy } = require("./decisionWhy");
 
 const TELEGRAM_MESSAGE_LIMIT = 3900;
 const RLE = "\u202B"; // Right-to-Left Embedding
@@ -384,7 +384,7 @@ function formatDailyTradingPlanMessage(plan, meta = {}) {
     "========================",
     "دلیل تصمیم",
     "========================",
-    formatDecisionWhyBlock(plan, meta.engineScore || {}),
+    ...buildDecisionWhy(plan, meta.engineScore || {}),
     "",
     "⚠️ Pattern alone is not a trade. Final plan needs Market + Technical + Risk confirmation.",
     "⚠️ سیگنال اجرای خودکار نیست؛ Trading Plan برای تصمیم انسانی/تست است.",
