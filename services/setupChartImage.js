@@ -354,38 +354,10 @@ async function renderDailySetupChart(plan, meta = {}) {
   }
 }
 
-const { formatDecisionWhyBlock } = require("./decisionWhy");
+const { formatMorningCaption } = require("./decisionWhy");
 
 function formatSetupChartCaption(plan, meta = {}) {
-  const styleNote =
-    plan.direction === "RANGE" && /bear/i.test(String(plan.bias || ""))
-      ? "سبک سطوح: فروش واکنش به مقاومت (رصد رنج)"
-      : plan.direction === "RANGE" && /bull/i.test(String(plan.bias || ""))
-        ? "سبک سطوح: خرید واکنش به حمایت (رصد رنج)"
-        : null;
-
-  return [
-    "چارت ستاپ روزانه BTC",
-    meta.iranDate ? `تاریخ: ${meta.iranDate}` : null,
-    `سناریوی کندل روز: ${plan.day_outlook_fa || meta.engineScore?.day_outlook?.expected_day_candle_fa || "خنثی"} (${plan.day_outlook_confidence ?? meta.engineScore?.day_outlook?.confidence ?? plan.confidence ?? 0}%)`,
-    plan.closed_daily_candle?.color_fa || meta.engineScore?.day_outlook?.closed_candle?.color_fa
-      ? `کندل بسته‌شده دیروز: ${plan.closed_daily_candle?.color_fa || meta.engineScore.day_outlook.closed_candle.color_fa}${
-          (plan.closed_daily_candle || meta.engineScore?.day_outlook?.closed_candle)?.open != null
-            ? ` (O ${(plan.closed_daily_candle || meta.engineScore.day_outlook.closed_candle).open} → C ${(plan.closed_daily_candle || meta.engineScore.day_outlook.closed_candle).close})`
-            : ""
-        }`
-      : null,
-    `بایاس: ${plan.bias || "Neutral"} | ${plan.direction || "RANGE"} | ${plan.confidence ?? 0}%`,
-    styleNote,
-    plan.trade_allowed === false ? "وضعیت: فقط رصد (Monitoring Only)" : null,
-    `ورود: ${plan.entry || "-"}`,
-    `حد سود: TP1 ${plan.tp1 || "-"} | TP2 ${plan.tp2 || "-"} | TP3 ${plan.tp3 || "-"}`,
-    `حد ضرر: ${plan.stop_loss || "-"} | نسبت سود به زیان: ${plan.risk_reward || "-"}`,
-    "",
-    formatDecisionWhyBlock(plan, meta.engineScore || {}),
-  ]
-    .filter((line) => line != null && line !== "")
-    .join("\n");
+  return formatMorningCaption(plan, meta);
 }
 
 module.exports = {

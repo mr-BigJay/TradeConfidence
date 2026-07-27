@@ -312,23 +312,15 @@ function formatDailyTradingPlanMessage(plan, meta = {}) {
     "========================",
     "سناریوی کندل روز",
     "========================",
-    `کندل بسته‌شده دیروز: ${plan.closed_daily_candle?.color_fa || meta.engineScore?.day_outlook?.closed_candle?.color_fa || "-"}`,
-    plan.closed_daily_candle?.open != null && plan.closed_daily_candle?.close != null
-      ? `OHLC دیروز: O ${plan.closed_daily_candle.open} → C ${plan.closed_daily_candle.close}`
-      : meta.engineScore?.day_outlook?.closed_candle?.open != null
-        ? `OHLC دیروز: O ${meta.engineScore.day_outlook.closed_candle.open} → C ${meta.engineScore.day_outlook.closed_candle.close}`
-        : null,
-    `پیش‌بینی کندل امروز: ${plan.day_outlook_fa || meta.engineScore?.day_outlook?.expected_day_candle_fa || "خنثی"}`,
-    `اطمینان سناریو: ${plan.day_outlook_confidence ?? meta.engineScore?.day_outlook?.confidence ?? plan.confidence ?? 0}%`,
-    plan.day_outlook_summary ||
-      meta.engineScore?.day_outlook?.summary_fa ||
-      "سناریوی کندل روز در دسترس نیست",
-    ...(Array.isArray(plan.day_outlook_reasons) && plan.day_outlook_reasons.length
-      ? plan.day_outlook_reasons.slice(0, 5).map((item) => `• ${item}`)
-      : (meta.engineScore?.day_outlook?.reasons || []).slice(0, 5).map((item) => `• ${item}`)),
-    plan.previous_outlook_result?.note_fa
-      ? `نتیجه پیش‌بینی دیروز: ${plan.previous_outlook_result.note_fa}`
+    ...buildDecisionWhy(plan, meta.engineScore || {}),
+    plan.closed_daily_candle?.color_fa || meta.engineScore?.day_outlook?.closed_candle?.color_fa
+      ? `دیروز: ${plan.closed_daily_candle?.color_fa || meta.engineScore.day_outlook.closed_candle.color_fa}${
+          (plan.closed_daily_candle || meta.engineScore?.day_outlook?.closed_candle)?.open != null
+            ? ` (${(plan.closed_daily_candle || meta.engineScore.day_outlook.closed_candle).open}→${(plan.closed_daily_candle || meta.engineScore.day_outlook.closed_candle).close})`
+            : ""
+        }`
       : null,
+    plan.previous_outlook_result?.note_fa || null,
     "",
     "========================",
     "Narrative Analysis",
@@ -376,10 +368,7 @@ function formatDailyTradingPlanMessage(plan, meta = {}) {
     "========================",
     `Direction: ${plan.direction || "-"}`,
     plan.trade_allowed === false && plan.direction === "RANGE"
-      ? "⚠️ فقط رصد (Monitoring Only) — سیگنال معامله جهتی نیست"
-      : null,
-    plan.trade_allowed === false && plan.direction === "RANGE"
-      ? "Note: سطوح Entry/TP/SL برای مدیریت ریسک رنج منتشر شده‌اند، نه به‌عنوان پوزیشن فعال"
+      ? "فقط رصد — سیگنال معامله جهتی نیست"
       : null,
     `Entry Zone: ${plan.entry || "-"}`,
     `TP1: ${plan.tp1 || "-"}`,
@@ -405,13 +394,7 @@ function formatDailyTradingPlanMessage(plan, meta = {}) {
     "========================",
     warnings || "• Risk management required",
     "",
-    "========================",
-    "دلیل تصمیم",
-    "========================",
-    ...buildDecisionWhy(plan, meta.engineScore || {}),
-    "",
-    "⚠️ Pattern alone is not a trade. Final plan needs Market + Technical + Risk confirmation.",
-    "⚠️ سیگنال اجرای خودکار نیست؛ Trading Plan برای تصمیم انسانی/تست است.",
+    "⚠️ Pattern alone is not a trade. سیگنال اجرای خودکار نیست.",
   ]
     .filter((line) => line != null && line !== "")
     .join("\n");

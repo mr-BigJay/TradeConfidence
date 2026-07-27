@@ -207,12 +207,11 @@ async function runDailySetup(options = {}) {
         });
       }
 
-      const chartCaption = [
-        replacing ? "به‌روزرسانی ستاپ امروز (جایگزین نسخه قبلی)" : null,
-        formatSetupChartCaption(plan, { iranDate, engineScore }),
-      ]
-        .filter(Boolean)
-        .join("\n");
+      const chartCaption = formatSetupChartCaption(plan, {
+        iranDate,
+        engineScore,
+        replacing,
+      });
 
       const telegramResults = await sendDailyTradingPlan(plan, {
         iranDate,
