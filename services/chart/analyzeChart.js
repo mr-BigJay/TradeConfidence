@@ -584,6 +584,55 @@ function analyzeLiquidity(candles, levels, futuresContext = {}) {
   };
 }
 
+function buildLevelPlan({ direction, price, majorSupport, majorResistance, support2, resistance2, fib }) {
+  const px = Number.isFinite(price) ? price : null;
+  const fib618 = fib["0.618"];
+  const fib5 = fib["0.5"];
+  const fib382 = fib["0.382"];
+  const fib236 = fib["0.236"];
+  const fib786 = fib["0.786"];
+
+  if (direction === "LONG") {
+    const zoneLow = majorSupport || fib618 || (px ? round(px * 0.985, 1) : null);
+    const zoneHigh = fib5 || (zoneLow ? round(zoneLow * 1.004, 1) : null);
+    if (!zoneLow || !zoneHigh) return null;
+    const entry = `${round(Math.min(zoneLow, zoneHigh), 1)}-${round(Math.max(zoneLow, zoneHigh), 1)}`;
+    const stopLoss = round((majorSupport || zoneLow) * 0.992, 1);
+    const tp1 = majorResistance || fib236 || (px ? round(px * 1.01, 1) : round(zoneHigh * 1.01, 1));
+    const tp2 = resistance2 || round(tp1 * 1.015, 1);
+    const tp3 = round(tp1 * 1.03, 1);
+    return { entry, stopLoss, tp1, tp2, tp3, invalidation: stopLoss };
+  }
+
+  if (direction === "SHORT") {
+    const zoneHigh = majorResistance || fib382 || (px ? round(px * 1.015, 1) : null);
+    const zoneLow = fib5 || (zoneHigh ? round(zoneHigh * 0.996, 1) : null);
+    if (!zoneLow || !zoneHigh) return null;
+    const entry = `${round(Math.min(zoneLow, zoneHigh), 1)}-${round(Math.max(zoneLow, zoneHigh), 1)}`;
+    const stopLoss = round((majorResistance || zoneHigh) * 1.008, 1);
+    const tp1 = majorSupport || fib786 || (px ? round(px * 0.99, 1) : round(zoneLow * 0.99, 1));
+    const tp2 = support2 || round(tp1 * 0.985, 1);
+    const tp3 = round(tp1 * 0.97, 1);
+    return { entry, stopLoss, tp1, tp2, tp3, invalidation: stopLoss };
+  }
+
+  // RANGE / Neutral: still publish concrete day levels from S/R for the chart.
+  const support = majorSupport || fib618 || (px ? round(px * 0.99, 1) : null);
+  const lower = support2 || (support ? round(support * 0.995, 1) : null);
+  const resistance = majorResistance || fib236 || (px ? round(px * 1.01, 1) : null);
+  const upper = resistance2 || (resistance ? round(resistance * 1.015, 1) : null);
+  if (!support || !resistance || !lower) return null;
+
+  const entryLow = round(Math.min(support, lower), 1);
+  const entryHigh = round(Math.max(support, fib5 || support), 1);
+  const entry = `${entryLow}-${entryHigh}`;
+  const stopLoss = round(lower * 0.997, 1);
+  const tp1 = round((support + resistance) / 2, 1);
+  const tp2 = resistance;
+  const tp3 = upper || round(resistance * 1.015, 1);
+  return { entry, stopLoss, tp1, tp2, tp3, invalidation: stopLoss };
+}
+
 function buildChartSetup({ htf, ltf, futuresContext = {} }) {
   const marketConfirmation = {
     funding: futuresContext.fundingRatePercent ?? null,
@@ -622,95 +671,95 @@ function buildChartSetup({ htf, ltf, futuresContext = {} }) {
   if (htf.indicators?.trend === "Bullish" || htf.indicators?.trend === "Bearish") {
     technicalConfirmation.reasons.push(`HTF trend=${htf.indicators.trend}`);
   }
+  if (/Transition|Range/i.test(htf.structure?.structure || "")) {
+    technicalConfirmation.reasons.push(`HTF structure=${htf.structure.structure}`);
+  }
   if (ltf.patterns?.[0]) technicalConfirmation.reasons.push(`Pattern=${ltf.patterns[0].name}`);
   if (ltf.indicators?.rsiState === "oversold" || ltf.indicators?.rsiState === "overbought") {
     technicalConfirmation.reasons.push(`RSI=${ltf.indicators.rsiState}`);
+  }
+  if (htf.levels?.majorSupport?.[0] && htf.levels?.majorResistance?.[0]) {
+    technicalConfirmation.reasons.push("S/R mapped");
   }
   technicalConfirmation.passed = technicalConfirmation.reasons.length >= 2;
 
   const price = ltf.price;
   const majorSupport = htf.levels?.majorSupport?.[0] || ltf.levels?.majorSupport?.[0];
+  const support2 = htf.levels?.majorSupport?.[1] || ltf.levels?.majorSupport?.[1] || null;
   const majorResistance = htf.levels?.majorResistance?.[0] || ltf.levels?.majorResistance?.[0];
+  const resistance2 = htf.levels?.majorResistance?.[1] || ltf.levels?.majorResistance?.[1] || null;
   const fib = htf.fibonacci?.levels || {};
 
   let direction = "RANGE";
-  if (
-    /Bullish/i.test(htf.structure?.structure || "") ||
-    htf.indicators?.trend === "Bullish" ||
-    futuresContext.cvd?.bias === "buy_pressure"
-  ) {
-    direction = "LONG";
-  }
-  if (
-    /Bearish/i.test(htf.structure?.structure || "") ||
-    htf.indicators?.trend === "Bearish" ||
-    futuresContext.cvd?.bias === "sell_pressure"
-  ) {
-    if (direction === "LONG") direction = "RANGE";
-    else direction = "SHORT";
-  }
+  const bullishVotes =
+    (/Bullish/i.test(htf.structure?.structure || "") ? 1 : 0) +
+    (htf.indicators?.trend === "Bullish" ? 1 : 0) +
+    (futuresContext.cvd?.bias === "buy_pressure" ? 1 : 0);
+  const bearishVotes =
+    (/Bearish/i.test(htf.structure?.structure || "") ? 1 : 0) +
+    (htf.indicators?.trend === "Bearish" ? 1 : 0) +
+    (futuresContext.cvd?.bias === "sell_pressure" ? 1 : 0);
+
+  if (bullishVotes > bearishVotes && bullishVotes >= 2) direction = "LONG";
+  else if (bearishVotes > bullishVotes && bearishVotes >= 2) direction = "SHORT";
+  else direction = "RANGE";
 
   // Pattern alone cannot force direction if confirmations fail.
   const bothConfirmed = marketConfirmation.passed && technicalConfirmation.passed;
-  if (!bothConfirmed) {
+  if (!bothConfirmed && direction !== "RANGE") {
+    // Keep mapped levels, but force non-aggressive direction label.
     direction = "RANGE";
   }
 
-  let entry = null;
-  let stopLoss = null;
-  let tp1 = null;
-  let tp2 = null;
-  let tp3 = null;
+  const levelPlan =
+    buildLevelPlan({
+      direction,
+      price,
+      majorSupport,
+      majorResistance,
+      support2,
+      resistance2,
+      fib,
+    }) ||
+    buildLevelPlan({
+      direction: "RANGE",
+      price,
+      majorSupport,
+      majorResistance,
+      support2,
+      resistance2,
+      fib,
+    });
+
   let riskReward = null;
-  let invalidation = null;
-
-  if (direction === "LONG") {
-    const zoneLow = majorSupport || fib["0.618"] || round(price * 0.985, 1);
-    const zoneHigh = fib["0.5"] || round(zoneLow * 1.004, 1);
-    entry = `${round(Math.min(zoneLow, zoneHigh), 1)}-${round(Math.max(zoneLow, zoneHigh), 1)}`;
-    stopLoss = round((majorSupport || zoneLow) * 0.992, 1);
-    tp1 = majorResistance || fib["0.236"] || round(price * 1.01, 1);
-    tp2 = round((tp1 || price) * 1.015, 1);
-    tp3 = round((tp1 || price) * 1.03, 1);
-    invalidation = stopLoss;
-  } else if (direction === "SHORT") {
-    const zoneHigh = majorResistance || fib["0.382"] || round(price * 1.015, 1);
-    const zoneLow = fib["0.5"] || round(zoneHigh * 0.996, 1);
-    entry = `${round(Math.min(zoneLow, zoneHigh), 1)}-${round(Math.max(zoneLow, zoneHigh), 1)}`;
-    stopLoss = round((majorResistance || zoneHigh) * 1.008, 1);
-    tp1 = majorSupport || fib["0.786"] || round(price * 0.99, 1);
-    tp2 = round((tp1 || price) * 0.985, 1);
-    tp3 = round((tp1 || price) * 0.97, 1);
-    invalidation = stopLoss;
-  }
-
-  if (entry && stopLoss && tp1) {
-    const entryMid = entry.includes("-")
-      ? (Number(entry.split("-")[0]) + Number(entry.split("-")[1])) / 2
-      : Number(entry);
-    const risk = Math.abs(entryMid - stopLoss);
-    const reward = Math.abs(tp1 - entryMid);
+  if (levelPlan?.entry && levelPlan.stopLoss && levelPlan.tp1) {
+    const entryMid = String(levelPlan.entry).includes("-")
+      ? (Number(String(levelPlan.entry).split("-")[0]) + Number(String(levelPlan.entry).split("-")[1])) / 2
+      : Number(levelPlan.entry);
+    const risk = Math.abs(entryMid - levelPlan.stopLoss);
+    const reward = Math.abs(levelPlan.tp1 - entryMid);
     riskReward = risk > 0 ? `1:${round(reward / risk, 2)}` : null;
   }
 
   const riskManagement = {
-    passed: Boolean(entry && stopLoss && tp1 && riskReward),
-    entry,
-    stop_loss: stopLoss,
-    tp1,
-    tp2,
-    tp3,
+    passed: Boolean(levelPlan?.entry && levelPlan?.stopLoss && levelPlan?.tp1 && riskReward),
+    entry: levelPlan?.entry || null,
+    stop_loss: levelPlan?.stopLoss || null,
+    tp1: levelPlan?.tp1 || null,
+    tp2: levelPlan?.tp2 || null,
+    tp3: levelPlan?.tp3 || null,
     risk_reward: riskReward,
-    invalidation,
+    invalidation: levelPlan?.invalidation || null,
   };
 
   return {
     direction,
     trade_allowed: bothConfirmed && riskManagement.passed && direction !== "RANGE",
+    levels_ready: riskManagement.passed,
     market_confirmation: marketConfirmation,
     technical_confirmation: technicalConfirmation,
     risk_management: riskManagement,
-    rule: "Pattern alone never creates a trade. Need Market + Technical + Risk confirmations.",
+    rule: "Pattern alone never creates a trade. Need Market + Technical + Risk confirmations for directional entry. RANGE days still publish S/R-based Entry/TP/SL for the chart.",
   };
 }
 

@@ -1,4 +1,4 @@
-const { toAsciiDigits, normalizeLevelText, parsePercent } = require("./numberFormat");
+const { toAsciiDigits, normalizeLevelText, parsePercent, extractPrices } = require("./numberFormat");
 
 function asArray(value) {
   if (Array.isArray(value)) {
@@ -13,7 +13,7 @@ function cleanLevels(values, limit = 4) {
   const seen = new Set();
   for (const value of asArray(values)) {
     const normalized = normalizeLevelText(value) || toAsciiDigits(String(value).trim());
-    if (!normalized || seen.has(normalized)) continue;
+    if (!normalized || seen.has(normalized) || /نامشخص|n\/a|unknown|-/i.test(normalized)) continue;
     seen.add(normalized);
     out.push(normalized);
     if (out.length >= limit) break;
@@ -49,6 +49,56 @@ function asStatus(value) {
   if (text.includes("invalid") || /باطل/.test(String(value || ""))) return "Invalidated";
   if (text.includes("weak") || /ضعیف/.test(String(value || ""))) return "Weakening";
   return "Active";
+}
+
+function isBlankLevel(value) {
+  const text = String(value || "").trim();
+  return !text || /نامشخص|unknown|n\/a|^-$/i.test(text);
+}
+
+function firstPriceText(value) {
+  const prices = extractPrices(value);
+  return prices.length ? String(prices[0]) : "";
+}
+
+function buildLevelsFromSupportsResistances(supports, resistances, currentPrice) {
+  const supportNums = supports.map((item) => extractPrices(item)[0]).filter(Number.isFinite);
+  const resistanceNums = resistances.map((item) => extractPrices(item)[0]).filter(Number.isFinite);
+  const price = extractPrices(currentPrice)[0];
+  if (!supportNums.length || !resistanceNums.length) return null;
+
+  const support = Math.max(...supportNums.filter((v) => !price || v <= price), supportNums[0]);
+  const lower = Math.min(...supportNums);
+  const resistance = Math.min(...resistanceNums.filter((v) => !price || v >= price), resistanceNums[0]);
+  const upper = Math.max(...resistanceNums);
+  if (!Number.isFinite(support) || !Number.isFinite(resistance)) return null;
+
+  return {
+    entry: `${Math.round(Math.min(support, lower))}-${Math.round(Math.max(support, lower))}`,
+    stop_loss: String(Math.round(lower * 0.997)),
+    tp1: String(Math.round((support + resistance) / 2)),
+    tp2: String(Math.round(resistance)),
+    tp3: String(Math.round(upper)),
+    risk_reward: "n/a",
+    invalidation: String(Math.round(lower * 0.997)),
+  };
+}
+
+function pickLevel(...candidates) {
+  for (const value of candidates) {
+    if (isBlankLevel(value)) continue;
+    const normalized = normalizeLevelText(value) || toAsciiDigits(String(value)).trim();
+    if (!isBlankLevel(normalized)) return normalized;
+  }
+  return "";
+}
+
+function chartGateLabel(setup = {}) {
+  if (setup.trade_allowed) return `${setup.direction || "LONG"} confirmed`;
+  if (setup.levels_ready || setup.entry) {
+    return `RANGE levels mapped (no directional trade)`;
+  }
+  return "levels unavailable";
 }
 
 function buildTechnicalFallback(engine = {}, rawTech = {}) {
@@ -92,68 +142,92 @@ function buildTechnicalFallback(engine = {}, rawTech = {}) {
       (chart.liquidity?.notes || []).join(" | ") ||
       chart.liquidity?.state ||
       "",
-    chart_setup_status: setup.trade_allowed
-      ? `${setup.direction} allowed`
-      : "blocked (need Market+Technical+Risk)",
+    chart_setup_status: chartGateLabel(setup),
   };
 }
 
 function normalizeTradingPlan(symbol, raw, engine = {}) {
   const data = raw && typeof raw === "object" ? raw : {};
   const chartSetup = engine.chart_setup || {};
+  const chart = engine.chart_snapshot || {};
   const bias = asBias(data.bias || engine.bias || "Neutral");
-
-  // Prefer confirmed chart setup levels when available.
-  const preferChart = Boolean(chartSetup.trade_allowed);
-  const entry =
-    (preferChart && chartSetup.entry) ||
-    normalizeLevelText(data.entry) ||
-    toAsciiDigits(data.entry || "").trim() ||
-    "نامشخص";
-  const stopLoss =
-    (preferChart && chartSetup.stop_loss) ||
-    normalizeLevelText(data.stop_loss) ||
-    toAsciiDigits(data.stop_loss || "").trim() ||
-    "نامشخص";
-  const tp1 =
-    (preferChart && chartSetup.tp1) ||
-    normalizeLevelText(data.tp1) ||
-    toAsciiDigits(data.tp1 || "").trim() ||
-    "";
-  const tp2 =
-    (preferChart && chartSetup.tp2) ||
-    normalizeLevelText(data.tp2) ||
-    toAsciiDigits(data.tp2 || "").trim() ||
-    "";
-  const tp3 =
-    (preferChart && chartSetup.tp3) ||
-    normalizeLevelText(data.tp3) ||
-    toAsciiDigits(data.tp3 || "").trim() ||
-    "";
+  const technical = buildTechnicalFallback(engine, data.technical_analysis || {});
 
   const supports = cleanLevels(
     [
-      ...(preferChart ? [chartSetup.entry?.split?.("-")?.[0]].filter(Boolean) : []),
       ...asArray(data.supports),
+      ...(chart.htf?.levels?.majorSupport || []),
+      ...String(technical.major_support || "")
+        .split(",")
+        .map((item) => item.trim()),
     ],
     4,
   );
-  const resistances = cleanLevels(data.resistances, 4);
+  const resistances = cleanLevels(
+    [
+      ...asArray(data.resistances),
+      ...(chart.htf?.levels?.majorResistance || []),
+      ...String(technical.major_resistance || "")
+        .split(",")
+        .map((item) => item.trim()),
+    ],
+    4,
+  );
+
+  const currentPrice =
+    normalizeLevelText(data.current_price) ||
+    toAsciiDigits(data.current_price || "").trim() ||
+    (chart.ltf?.price != null ? String(chart.ltf.price) : "") ||
+    (chart.htf?.price != null ? String(chart.htf.price) : "");
+
+  // Always prefer concrete chart-mapped levels when present (even on RANGE days).
+  const fallbackFromSr = buildLevelsFromSupportsResistances(supports, resistances, currentPrice);
+  const preferChartLevels = Boolean(chartSetup.entry && chartSetup.stop_loss && chartSetup.tp1);
+
+  const entry = pickLevel(
+    preferChartLevels ? chartSetup.entry : "",
+    data.entry,
+    fallbackFromSr?.entry,
+  ) || "نامشخص";
+  const stopLoss = pickLevel(
+    preferChartLevels ? chartSetup.stop_loss : "",
+    data.stop_loss,
+    fallbackFromSr?.stop_loss,
+  ) || "نامشخص";
+  const tp1 = pickLevel(preferChartLevels ? chartSetup.tp1 : "", data.tp1, fallbackFromSr?.tp1);
+  const tp2 = pickLevel(preferChartLevels ? chartSetup.tp2 : "", data.tp2, fallbackFromSr?.tp2);
+  const tp3 = pickLevel(preferChartLevels ? chartSetup.tp3 : "", data.tp3, fallbackFromSr?.tp3);
+  const riskReward =
+    pickLevel(
+      preferChartLevels ? chartSetup.risk_reward : "",
+      data.risk_reward,
+      data.rr,
+      fallbackFromSr?.risk_reward,
+    ) || "n/a";
+  const invalidation = pickLevel(
+    preferChartLevels ? chartSetup.invalidation : "",
+    data.invalidation_level,
+    fallbackFromSr?.invalidation,
+    stopLoss,
+  );
+
+  // Direction: keep model/engine direction; only force chart direction when trade is confirmed.
+  const direction = chartSetup.trade_allowed
+    ? asDirection(chartSetup.direction, bias)
+    : asDirection(data.direction || chartSetup.direction, bias);
 
   return {
     symbol,
     pair_label: "BTC / USDT",
     bias,
-    direction: preferChart
-      ? asDirection(chartSetup.direction, bias)
-      : asDirection(data.direction, bias),
+    direction,
     confidence: parsePercent(data.confidence, engine.confidence || 50),
     market_score: parsePercent(data.market_score, engine.market_score || engine.confidence || 50),
     market_regime: data.market_regime || engine.market_regime || "Range",
     risk_level: ["Low", "Medium", "High"].includes(data.risk_level)
       ? data.risk_level
       : engine.risk_level || "Medium",
-    current_price: normalizeLevelText(data.current_price) || toAsciiDigits(data.current_price || ""),
+    current_price: currentPrice,
     coinex_summary: toAsciiDigits(data.coinex_summary || "").trim(),
     coinex_validation_status: asValidationStatus(
       data.coinex_validation_status,
@@ -161,7 +235,14 @@ function normalizeTradingPlan(symbol, raw, engine = {}) {
     ),
     futures_analysis: data.futures_analysis || {},
     options_analysis: data.options_analysis || {},
-    technical_analysis: buildTechnicalFallback(engine, data.technical_analysis || {}),
+    technical_analysis: {
+      ...technical,
+      chart_setup_status: chartGateLabel({
+        ...chartSetup,
+        entry,
+        levels_ready: Boolean(chartSetup.levels_ready || (!isBlankLevel(entry) && !isBlankLevel(stopLoss))),
+      }),
+    },
     execution_notes: asArray(data.execution_notes).map((item) => toAsciiDigits(item).trim()).slice(0, 5),
     main_scenario: toAsciiDigits(data.main_scenario || data.reason || "").trim(),
     entry,
@@ -169,16 +250,10 @@ function normalizeTradingPlan(symbol, raw, engine = {}) {
     tp1,
     tp2,
     tp3,
-    risk_reward:
-      (preferChart && chartSetup.risk_reward) ||
-      toAsciiDigits(data.risk_reward || data.rr || "").trim() ||
-      "n/a",
-    supports,
-    resistances,
-    invalidation_level:
-      (preferChart && chartSetup.invalidation) ||
-      normalizeLevelText(data.invalidation_level) ||
-      toAsciiDigits(data.invalidation_level || "").trim(),
+    risk_reward: riskReward,
+    supports: supports.length ? supports : cleanLevels([firstPriceText(entry)], 2),
+    resistances: resistances.length ? resistances : cleanLevels([tp2, tp3, tp1], 3),
+    invalidation_level: invalidation,
     reversal_trigger: toAsciiDigits(data.reversal_trigger || "").trim(),
     alternative_scenario: toAsciiDigits(data.alternative_scenario || "").trim(),
     risk_warnings: asArray(data.risk_warnings).map((item) => toAsciiDigits(item).trim()).slice(0, 6),

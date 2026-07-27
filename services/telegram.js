@@ -324,7 +324,7 @@ function formatDailyTradingPlanMessage(plan, meta = {}) {
     `Liquidity: ${technical.liquidity_notes || "-"}`,
     technical.chart_setup_status ? `Chart Gate: ${technical.chart_setup_status}` : null,
     meta.engineScore?.chart_setup
-      ? `Confirmations: Market=${meta.engineScore.chart_setup.market_confirmation ? "OK" : "NO"} | Technical=${meta.engineScore.chart_setup.technical_confirmation ? "OK" : "NO"} | Risk=${meta.engineScore.chart_setup.risk_confirmation ? "OK" : "NO"}`
+      ? `Confirmations: Market=${meta.engineScore.chart_setup.market_confirmation ? "OK" : "NO"} | Technical=${meta.engineScore.chart_setup.technical_confirmation ? "OK" : "NO"} | Levels=${meta.engineScore.chart_setup.levels_ready || meta.engineScore.chart_setup.risk_confirmation ? "OK" : "NO"} | Trade=${meta.engineScore.chart_setup.trade_allowed ? "YES" : "NO"}`
       : null,
     "",
     "========================",

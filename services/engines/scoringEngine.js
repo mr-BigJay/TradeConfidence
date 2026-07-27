@@ -170,6 +170,7 @@ function scoreMarketBundle(bundle) {
     chart_setup: {
       direction: setup.direction || "RANGE",
       trade_allowed: Boolean(setup.trade_allowed),
+      levels_ready: Boolean(setup.levels_ready || setup.risk_management?.passed),
       entry: setup.risk_management?.entry || null,
       stop_loss: setup.risk_management?.stop_loss || null,
       tp1: setup.risk_management?.tp1 || null,

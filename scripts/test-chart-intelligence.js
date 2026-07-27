@@ -110,8 +110,52 @@ const plan = normalizeTradingPlan(
   score,
 );
 
-if (score.chart_setup.trade_allowed && score.chart_setup.entry) {
+if (score.chart_setup.entry) {
   assert.equal(plan.entry, score.chart_setup.entry);
+  assert.ok(plan.stop_loss);
+  assert.ok(plan.tp1);
 }
+
+// Regression: Neutral/RANGE with empty GPT levels must still fill from S/R.
+const rangePlan = normalizeTradingPlan(
+  "BTCUSDT",
+  {
+    bias: "Neutral",
+    direction: "RANGE",
+    confidence: 75,
+    current_price: "65308.1",
+    entry: "نامشخص",
+    stop_loss: "نامشخص",
+    tp1: "",
+    tp2: "",
+    tp3: "",
+    supports: ["65212.5", "64948.8"],
+    resistances: ["65780", "66924.1"],
+    technical_analysis: {
+      major_support: "65212.5,64948.8",
+      major_resistance: "65780,66924.1",
+    },
+  },
+  {
+    bias: "Neutral",
+    confidence: 75,
+    chart_setup: {
+      trade_allowed: false,
+      levels_ready: true,
+      direction: "RANGE",
+      entry: "64948.8-65212.5",
+      stop_loss: 64754.5,
+      tp1: 65496.2,
+      tp2: 65780,
+      tp3: 66924.1,
+      risk_reward: "1:1.5",
+    },
+  },
+);
+assert.equal(rangePlan.entry, "64948.8-65212.5");
+assert.notEqual(rangePlan.stop_loss, "نامشخص");
+assert.ok(rangePlan.tp1);
+assert.ok(rangePlan.tp2);
+assert.match(rangePlan.technical_analysis.chart_setup_status, /RANGE levels mapped|confirmed/);
 
 console.log("chart intelligence tests passed");
