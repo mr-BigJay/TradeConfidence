@@ -11,47 +11,50 @@ const {
 const logger = require("../logger");
 const { scrapeAiResearch } = require("../playwright/scraper");
 const { buildContentFingerprint, isSameResearch } = require("./contentFingerprint");
-const { fetchBitunixMarketData } = require("./bitunixData");
-const { evaluateDailySetup } = require("./openaiSetup");
+const { collectMarketBundle } = require("./marketBundle");
+const { scoreMarketBundle } = require("./engines/scoringEngine");
+const { evaluateDailyTradingPlan } = require("./openaiTradingPlan");
 const { sendSetupUpdate } = require("./telegram");
 const { formatIranClock, getIranDateString } = require("./timeIran");
 
-async function maybeScrapeResearch(symbol, options = {}) {
+async function maybeAttachFreshResearch(symbol, marketBundle, options = {}) {
+  // If bundle already has research, use fingerprinting against DB.
+  if (marketBundle.coinex?.available && marketBundle.coinex.text) {
+    const fingerprint = buildContentFingerprint(marketBundle.coinex.text);
+    const latestContent = await getLatestContent(symbol);
+    const unchanged = !options.force && isSameResearch(latestContent, fingerprint);
+    return {
+      text: unchanged ? marketBundle.coinex.text : marketBundle.coinex.text,
+      fingerprint,
+      unchanged,
+      scrapeResult: {
+        text: marketBundle.coinex.text,
+        datetime: marketBundle.coinex.scrapedAt || new Date().toISOString(),
+        url: marketBundle.coinex.url,
+      },
+      isNew: !unchanged,
+    };
+  }
+
   try {
     const scrapeResult = await scrapeAiResearch(symbol);
     const fingerprint = buildContentFingerprint(scrapeResult.text);
     const latestContent = await getLatestContent(symbol);
-    const unchanged = isSameResearch(latestContent, fingerprint);
-
-    if (!options.force && unchanged) {
-      return {
-        text: "",
-        fingerprint,
-        unchanged: true,
-        scrapeResult,
-      };
-    }
-
+    const unchanged = !options.force && isSameResearch(latestContent, fingerprint);
     return {
       text: scrapeResult.text,
       fingerprint,
-      unchanged: false,
+      unchanged,
       scrapeResult,
+      isNew: !unchanged,
     };
   } catch (error) {
-    logger.warn("CoinEx research scrape failed; continuing with Bitunix-only evaluation", {
-      symbol,
-      error: error.message,
-    });
-    await saveEvent({
-      symbol,
-      event: "research_scrape_error",
-      message: error.message,
-    });
+    logger.warn("Intraday research refresh failed", { symbol, error: error.message });
     return {
       text: "",
       fingerprint: null,
       unchanged: true,
+      isNew: false,
       scrapeError: error.message,
     };
   }
@@ -63,11 +66,11 @@ async function processIntradaySymbol(symbol, options = {}) {
   const dailySetup = await getActiveDailySetup(symbol, iranDate);
 
   if (!dailySetup) {
-    logger.warn("No daily setup for today; intraday skipped", { symbol, iranDate });
+    logger.warn("No daily trading plan for today; intraday skipped", { symbol, iranDate });
     await saveEvent({
       symbol,
       event: "intraday_skip",
-      message: `No daily setup for ${iranDate}`,
+      message: `No daily plan for ${iranDate}`,
     });
     result.ok = true;
     result.skipped = true;
@@ -76,11 +79,11 @@ async function processIntradaySymbol(symbol, options = {}) {
   }
 
   if (dailySetup.status === "Invalidated" && !options.force) {
-    logger.info("Daily setup already invalidated; skipping intraday", { symbol, iranDate });
+    logger.info("Daily plan already invalidated; skipping intraday", { symbol, iranDate });
     await saveEvent({
       symbol,
       event: "intraday_skip",
-      message: "Setup already invalidated",
+      message: "Plan already invalidated",
     });
     result.ok = true;
     result.skipped = true;
@@ -88,16 +91,23 @@ async function processIntradaySymbol(symbol, options = {}) {
     return result;
   }
 
-  const bitunix1h = await fetchBitunixMarketData(symbol, { interval: "1h" });
-  const research = await maybeScrapeResearch(symbol, options);
-  const previousEval = await getLatestSetupEvaluation(dailySetup.id);
-
-  const evaluation = await evaluateDailySetup({
+  const marketBundle = await collectMarketBundle(symbol, {
+    includeResearch: true,
+    period: "1h",
+  });
+  const research = await maybeAttachFreshResearch(symbol, marketBundle, options);
+  const engineScore = scoreMarketBundle(marketBundle);
+  const evaluation = await evaluateDailyTradingPlan({
     symbol,
-    dailySetup,
-    bitunix1h,
-    researchText: research.text || "",
-    previousEvaluation: previousEval?.evaluation || null,
+    dailyPlan: {
+      ...dailySetup,
+      ...(dailySetup.setup || {}),
+      supports: dailySetup.supports,
+      resistances: dailySetup.resistances,
+    },
+    marketBundle,
+    engineScore,
+    validation: engineScore.validation,
   });
 
   await updateDailySetupStatus(
@@ -107,7 +117,7 @@ async function processIntradaySymbol(symbol, options = {}) {
     evaluation.market_score,
   );
 
-  if (research.fingerprint && research.scrapeResult && !research.unchanged) {
+  if (research.fingerprint && research.scrapeResult && research.isNew) {
     await saveContent({
       symbol,
       textHash: research.fingerprint.contentHash,
@@ -131,20 +141,27 @@ async function processIntradaySymbol(symbol, options = {}) {
     confidence: evaluation.confidence,
     market_score: evaluation.market_score,
     rationale: evaluation.rationale || evaluation.result,
-    evaluation,
-    bitunix_1h: bitunix1h,
+    evaluation: {
+      ...evaluation,
+      engineScore,
+      validation: engineScore.validation,
+    },
+    bitunix_1h: {
+      binance: marketBundle.futures?.raw || null,
+      deribit: marketBundle.options?.raw || null,
+      bitunix: marketBundle.execution?.raw || null,
+    },
     telegram_sent: true,
   });
 
   await saveEvent({
     symbol,
     event: "intraday_success",
-    message: `status=${evaluation.setup_status} conf=${evaluation.confidence} research=${research.unchanged ? "unchanged_or_missing" : "new"}`,
+    message: `status=${evaluation.setup_status} conf=${evaluation.confidence} research=${research.isNew ? "new" : "same_or_missing"}`,
   });
 
   result.ok = true;
   result.evaluation = evaluation;
-  result.researchUnchanged = research.unchanged;
   return result;
 }
 
@@ -155,8 +172,7 @@ async function runIntradayMonitor(options = {}) {
   const results = [];
   for (const symbol of config.coinex.symbols) {
     try {
-      const result = await processIntradaySymbol(symbol, options);
-      results.push(result);
+      results.push(await processIntradaySymbol(symbol, options));
     } catch (error) {
       logger.error("Intraday monitor failed", {
         symbol,

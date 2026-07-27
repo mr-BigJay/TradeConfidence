@@ -72,12 +72,20 @@ async function main() {
   const intradayExpression = buildCronExpression(config.scheduler.intervalMinutes);
   const dailyExpression = config.scheduler.dailyCron;
 
-  logger.info("Starting BTC daily setup + intraday monitor bot", {
+  logger.info("Starting BTC Advanced Market Intelligence Engine", {
     dailyCron: dailyExpression,
     timezone: IRAN_TZ,
     intradayCron: intradayExpression,
     symbols: config.coinex.symbols,
+    architecture: "CoinEx narrative + Binance reference + Deribit options + Bitunix execution",
   });
+
+  try {
+    const { startBinanceWsCollector } = require("./services/providers/binanceWsCollector");
+    await startBinanceWsCollector(config.coinex.symbols[0] || "BTCUSDT");
+  } catch (error) {
+    logger.warn("Binance WS bootstrap skipped", { error: error.message });
+  }
 
   // On boot: if no setup today, create one; then run one intraday check.
   await runSafely("daily-boot", runDailySetup, { force: false });

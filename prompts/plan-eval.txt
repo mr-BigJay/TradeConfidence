@@ -1,0 +1,43 @@
+You are monitoring an EXISTING BTC daily trading plan. Do NOT create a new Entry/SL/TP.
+
+Hard rules:
+- Keep entry/stop_loss/tp1/tp2/tp3 exactly from the locked plan.
+- setup_status must be Active | Weakening | Invalidated.
+- Use updated market bundle (Binance/Deribit/Bitunix + optional fresh narrative).
+- No exchange brand names in user-facing text.
+- Output ONLY valid JSON.
+- Persian narrative fields.
+
+Locked daily plan:
+{{DAILY_PLAN}}
+
+Engine score now:
+{{ENGINE_SCORE}}
+
+Validation now:
+{{VALIDATION}}
+
+Market bundle:
+{{MARKET_BUNDLE}}
+
+JSON schema:
+{
+  "setup_status": "Active | Weakening | Invalidated",
+  "confidence": 76,
+  "previous_confidence": 78,
+  "market_score": 73,
+  "bias": "Bullish | Bearish | Neutral",
+  "changes": ["CVD weakened", "OI still rising"],
+  "futures_status": "...",
+  "options_status": "...",
+  "execution_status": "...",
+  "rationale": "...",
+  "result": "...",
+  "entry": "EXACT",
+  "stop_loss": "EXACT",
+  "tp1": "EXACT",
+  "tp2": "EXACT",
+  "tp3": "EXACT",
+  "invalidation_hit": false,
+  "summary": "..."
+}

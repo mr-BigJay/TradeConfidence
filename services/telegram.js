@@ -253,6 +253,84 @@ function formatDailySetupMessage(setup, meta = {}) {
     .join("\n");
 }
 
+function formatDailyTradingPlanMessage(plan, meta = {}) {
+  const futures = plan.futures_analysis || {};
+  const options = plan.options_analysis || {};
+  const warnings = joinLines(plan.risk_warnings || [], "•");
+  const executionNotes = joinLines(plan.execution_notes || [], "•");
+  const validation = plan.coinex_validation_status || meta.validation?.status || "Partially Confirmed";
+
+  return [
+    "BTC Daily Trading Plan",
+    meta.iranDate ? `تاریخ: ${meta.iranDate} (ایران)` : null,
+    "",
+    "========================",
+    "Market Overview",
+    "========================",
+    `Current Price: ${plan.current_price || "-"}`,
+    `Bias: ${plan.bias || "Neutral"}`,
+    `Regime: ${plan.market_regime || "-"}`,
+    `Confidence: ${plan.confidence ?? 0}%`,
+    `Market Score: ${plan.market_score ?? 0}/100`,
+    `Risk Level: ${plan.risk_level || "Medium"}`,
+    "",
+    "========================",
+    "Narrative Analysis",
+    "========================",
+    plan.coinex_summary || plan.main_scenario || "-",
+    `Validation: ${validation}`,
+    "",
+    "========================",
+    "Futures Analysis",
+    "========================",
+    `Funding: ${futures.funding_status || "-"}`,
+    `OI: ${futures.oi_status || "-"}`,
+    `CVD: ${futures.cvd_status || "-"}`,
+    `Smart Money: ${futures.smart_money_status || "-"}`,
+    `Liquidation Risk: ${futures.liquidation_risk || "-"}`,
+    "",
+    "========================",
+    "Options Analysis",
+    "========================",
+    `PCR: ${options.pcr || "-"}`,
+    `Max Pain: ${options.max_pain || "-"}`,
+    `Gamma: ${options.gamma_exposure || "-"}`,
+    `IV: ${options.iv || "-"}`,
+    `Dealer: ${options.dealer_position || "-"}`,
+    "",
+    "========================",
+    "Trading Setup",
+    "========================",
+    `Main Setup: ${plan.direction || "-"}`,
+    `Entry: ${plan.entry || "-"}`,
+    `TP1: ${plan.tp1 || "-"}`,
+    `TP2: ${plan.tp2 || "-"}`,
+    `TP3: ${plan.tp3 || "-"}`,
+    `Stop Loss: ${plan.stop_loss || "-"}`,
+    `RR: ${plan.risk_reward || "-"}`,
+    "",
+    "Reason",
+    plan.reason || plan.main_scenario || "-",
+    "",
+    "========================",
+    "Alternative Scenario",
+    "========================",
+    plan.alternative_scenario || "-",
+    `Invalidation: ${plan.invalidation_level || "-"}`,
+    `Reversal Trigger: ${plan.reversal_trigger || "-"}`,
+    executionNotes ? `\nExecution Notes\n${executionNotes}` : null,
+    "",
+    "========================",
+    "Risk Warning",
+    "========================",
+    warnings || "• Risk management required",
+    "",
+    "⚠️ سیگنال اجرای خودکار نیست؛ Trading Plan برای تصمیم انسانی/تست است.",
+  ]
+    .filter((line) => line != null && line !== "")
+    .join("\n");
+}
+
 function formatSetupUpdateMessage(evaluation, setup, meta = {}) {
   const changes = joinLines((evaluation.changes || []).slice(0, 8), "•");
   const confidenceLine =
@@ -293,6 +371,12 @@ async function sendDailySetup(setup, meta = {}) {
   }
 }
 
+async function sendDailyTradingPlan(plan, meta = {}) {
+  for (const chunk of splitTelegramText(formatDailyTradingPlanMessage(plan, meta))) {
+    await sendTelegramMessage(chunk);
+  }
+}
+
 async function sendSetupUpdate(evaluation, setup, meta = {}) {
   for (const chunk of splitTelegramText(formatSetupUpdateMessage(evaluation, setup, meta))) {
     await sendTelegramMessage(chunk);
@@ -303,9 +387,11 @@ module.exports = {
   formatDeepAnalysisMessage,
   formatCardCaption,
   formatDailySetupMessage,
+  formatDailyTradingPlanMessage,
   formatSetupUpdateMessage,
   sendMarketStatus,
   sendDailySetup,
+  sendDailyTradingPlan,
   sendSetupUpdate,
   sendTelegramMessage,
   sendTelegramPhoto,

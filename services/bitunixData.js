@@ -222,7 +222,7 @@ async function fetchBitunixKlines(symbol, interval = "1h", limit = 120) {
     .sort((a, b) => (a.time || 0) - (b.time || 0));
 }
 
-async function fetchBitunixOrderBook(symbol, limit = 30) {
+async function fetchBitunixOrderBook(symbol, limit = 15) {
   const normalized = String(symbol || "BTCUSDT").trim().toUpperCase();
   const payload = await fetchJson(
     `${FAPI_BASE}/api/v1/futures/market/depth?symbol=${normalized}&limit=${limit}`,

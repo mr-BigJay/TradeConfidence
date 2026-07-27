@@ -1,20 +1,17 @@
-# BTC AI Analyst (Daily Setup + Live Monitoring)
+# BTC Advanced Market Intelligence Engine
 
-Bot for BTC futures desk workflow:
+Daily Trading Plan engine (03:30 Asia/Tehran) that combines:
 
-1. **Daily Setup (03:30 Asia/Tehran)**  
-   Reads Bitunix futures daily data and creates **one** setup for the day:
-   Bias, Confidence, Entry, Stop Loss, TP1/TP2/TP3, Supports, Resistances,
-   Market Score, Risk Level.
+- **CoinEx** → narrative / scenarios / levels (kept)
+- **Binance Futures** → market truth (funding, OI, CVD, L/S, depth…)
+- **Deribit Options** → PCR, Max Pain, IV, dealer gamma proxy
+- **Bitunix** → execution venue only (price/funding/OI/orderbook divergence)
 
-2. **Intraday Monitoring (hourly)**  
-   Does **not** create a new setup. Uses Bitunix 1h data (+ CoinEx AI Research
-   when new) to mark the morning setup as:
-   `Active` / `Weakening` / `Invalidated`, and updates confidence only.
+Output each morning: Bias, Entry, TP1-3, SL, RR, Confidence, validation status, risk warnings.
 
-Auto-trading API is not connected yet. This stage is for setup quality testing.
+Intraday hourly updates evaluate the **same locked plan** (`Active` / `Weakening` / `Invalidated`) without inventing new Entry/SL/TP.
 
-> Reports are monitoring guidance, not guaranteed execution signals.
+Auto-trading API is not connected yet.
 
 ## Stack
 
