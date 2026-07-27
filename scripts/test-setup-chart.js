@@ -48,7 +48,7 @@ assert.match(html, /TP1/);
 assert.match(html, /SL/);
 
 const caption = formatSetupChartCaption(plan, { iranDate: "2026-07-27" });
-assert.match(caption, /Entry: 62000-62200/);
-assert.match(caption, /SL: 60900/);
+assert.match(caption, /ورود: 62000-62200/);
+assert.match(caption, /حد ضرر: 60900/);
 
 console.log("setup chart tests passed");

@@ -356,12 +356,12 @@ async function renderDailySetupChart(plan, meta = {}) {
 
 function formatSetupChartCaption(plan, meta = {}) {
   return [
-    "BTC Daily Setup Chart",
+    "چارت ستاپ روزانه BTC",
     meta.iranDate ? `تاریخ: ${meta.iranDate}` : null,
-    `Bias: ${plan.bias || "Neutral"} | ${plan.direction || "RANGE"} | ${plan.confidence ?? 0}%`,
-    `Entry: ${plan.entry || "-"}`,
-    `TP1: ${plan.tp1 || "-"} | TP2: ${plan.tp2 || "-"} | TP3: ${plan.tp3 || "-"}`,
-    `SL: ${plan.stop_loss || "-"} | RR: ${plan.risk_reward || "-"}`,
+    `بایاس: ${plan.bias || "Neutral"} | ${plan.direction || "RANGE"} | ${plan.confidence ?? 0}%`,
+    `ورود: ${plan.entry || "-"}`,
+    `حد سود: TP1 ${plan.tp1 || "-"} | TP2 ${plan.tp2 || "-"} | TP3 ${plan.tp3 || "-"}`,
+    `حد ضرر: ${plan.stop_loss || "-"} | نسبت سود به زیان: ${plan.risk_reward || "-"}`,
   ]
     .filter(Boolean)
     .join("\n");

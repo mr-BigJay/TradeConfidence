@@ -4,6 +4,9 @@ const config = require("../config/config");
 const { clipText } = require("./numberFormat");
 
 const TELEGRAM_MESSAGE_LIMIT = 3900;
+const RLE = "\u202B"; // Right-to-Left Embedding
+const PDF = "\u202C"; // Pop Directional Formatting
+const RLM = "\u200F"; // Right-to-Left Mark
 
 function requireTelegramConfig() {
   if (!config.telegram.botToken) {
@@ -13,6 +16,24 @@ function requireTelegramConfig() {
   if (!config.telegram.chatId) {
     throw new Error("TELEGRAM_CHAT_ID is missing");
   }
+}
+
+function hasPersian(text) {
+  return /[\u0600-\u06FF]/.test(String(text || ""));
+}
+
+/**
+ * Force RTL for Persian / mixed Persian+Latin lines so Telegram does not
+ * flip direction when a line starts with Latin characters.
+ */
+function applyRtlForPersian(text) {
+  return String(text || "")
+    .split("\n")
+    .map((line) => {
+      if (!line || !hasPersian(line)) return line;
+      return `${RLE}${RLM}${line}${PDF}`;
+    })
+    .join("\n");
 }
 
 function toneEmoji(tone) {
@@ -152,7 +173,7 @@ function formatCardCaption(analysis) {
 async function sendTelegramMessage(text) {
   requireTelegramConfig();
 
-  const cleaned = String(text || "").trim();
+  const cleaned = applyRtlForPersian(String(text || "").trim());
   if (!cleaned) {
     throw new Error("Telegram sendMessage refused empty text");
   }
@@ -190,7 +211,7 @@ async function sendTelegramPhoto(imagePath, caption) {
 
   const form = new FormData();
   form.append("chat_id", config.telegram.chatId);
-  form.append("caption", caption || "");
+  form.append("caption", applyRtlForPersian(caption || "").slice(0, 1024));
   form.append("photo", new Blob([fs.readFileSync(absolutePath)]), path.basename(absolutePath));
 
   const response = await fetch(
@@ -447,6 +468,7 @@ module.exports = {
   formatDailySetupMessage,
   formatDailyTradingPlanMessage,
   formatSetupUpdateMessage,
+  applyRtlForPersian,
   sendMarketStatus,
   sendDailySetup,
   sendDailyTradingPlan,

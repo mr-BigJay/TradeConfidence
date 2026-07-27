@@ -182,30 +182,26 @@ function normalizeTradingPlan(symbol, raw, engine = {}) {
 
   // Always prefer concrete chart-mapped levels when present (even on RANGE days).
   const fallbackFromSr = buildLevelsFromSupportsResistances(supports, resistances, currentPrice);
-  const preferChartLevels = Boolean(chartSetup.entry && chartSetup.stop_loss && chartSetup.tp1);
 
+  // Prefer any concrete chart-mapped field even when trade_allowed=false.
   const entry = pickLevel(
-    preferChartLevels ? chartSetup.entry : "",
+    chartSetup.entry,
     data.entry,
     fallbackFromSr?.entry,
   ) || "نامشخص";
   const stopLoss = pickLevel(
-    preferChartLevels ? chartSetup.stop_loss : "",
+    chartSetup.stop_loss,
     data.stop_loss,
     fallbackFromSr?.stop_loss,
   ) || "نامشخص";
-  const tp1 = pickLevel(preferChartLevels ? chartSetup.tp1 : "", data.tp1, fallbackFromSr?.tp1);
-  const tp2 = pickLevel(preferChartLevels ? chartSetup.tp2 : "", data.tp2, fallbackFromSr?.tp2);
-  const tp3 = pickLevel(preferChartLevels ? chartSetup.tp3 : "", data.tp3, fallbackFromSr?.tp3);
+  const tp1 = pickLevel(chartSetup.tp1, data.tp1, fallbackFromSr?.tp1);
+  const tp2 = pickLevel(chartSetup.tp2, data.tp2, fallbackFromSr?.tp2);
+  const tp3 = pickLevel(chartSetup.tp3, data.tp3, fallbackFromSr?.tp3);
   const riskReward =
-    pickLevel(
-      preferChartLevels ? chartSetup.risk_reward : "",
-      data.risk_reward,
-      data.rr,
-      fallbackFromSr?.risk_reward,
-    ) || "n/a";
+    pickLevel(chartSetup.risk_reward, data.risk_reward, data.rr, fallbackFromSr?.risk_reward) ||
+    "n/a";
   const invalidation = pickLevel(
-    preferChartLevels ? chartSetup.invalidation : "",
+    chartSetup.invalidation,
     data.invalidation_level,
     fallbackFromSr?.invalidation,
     stopLoss,

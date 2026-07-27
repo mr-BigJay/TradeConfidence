@@ -13,6 +13,7 @@ const {
   renderDailySetupChart,
   formatSetupChartCaption,
 } = require("./setupChartImage");
+const { ensureTradingPlanLevels } = require("./ensurePlanLevels");
 const { getIranDateString, nextIranDailyCutoffIso } = require("./timeIran");
 
 async function runDailySetup(options = {}) {
@@ -57,7 +58,7 @@ async function runDailySetup(options = {}) {
         });
       }
 
-      const plan = await createDailyTradingPlan({
+      let plan = await createDailyTradingPlan({
         symbol,
         marketBundle,
         engineScore,
@@ -67,6 +68,18 @@ async function runDailySetup(options = {}) {
       // Prefer engine validation status if model drifts.
       plan.coinex_validation_status =
         plan.coinex_validation_status || validation.status || "Partially Confirmed";
+
+      // Hard guarantee: never send نامشخص Entry/TP/SL when price/S-R exist.
+      plan = ensureTradingPlanLevels(plan, engineScore, marketBundle);
+      logger.info("Daily plan levels ensured", {
+        symbol,
+        entry: plan.entry,
+        stopLoss: plan.stop_loss,
+        tp1: plan.tp1,
+        tp2: plan.tp2,
+        tp3: plan.tp3,
+        riskReward: plan.risk_reward,
+      });
 
       const createdAt = new Date().toISOString();
 
