@@ -4,6 +4,9 @@ const {
   detectStructure,
   detectPatterns,
   computeFibonacci,
+  computeVolumeAreas,
+  extractSessionLevels,
+  computeIndicators,
 } = require("../services/chart/analyzeChart");
 const { scoreMarketBundle } = require("../services/engines/scoringEngine");
 const { normalizeTradingPlan } = require("../services/tradingPlanNormalizer");
@@ -33,7 +36,7 @@ function makeCandles({ start = 100, count = 120, drift = 0.2, wave = 3 }) {
   return candles;
 }
 
-const up = makeCandles({ start: 60000, count: 150, drift: 40, wave: 120 });
+const up = makeCandles({ start: 60000, count: 220, drift: 40, wave: 120 });
 const structure = detectStructure(up);
 assert.match(structure.structure, /Bullish|Range|Transition/);
 
@@ -44,9 +47,26 @@ const fib = computeFibonacci(up);
 assert.equal(fib.available, true);
 assert.ok(fib.levels["0.618"]);
 
+const areas = computeVolumeAreas(up);
+assert.ok(areas.poc);
+assert.ok(areas.highVolumeNodes.length >= 1);
+
+const daily = makeCandles({ start: 55000, count: 20, drift: 80, wave: 200 });
+const session = extractSessionLevels({ "1d": daily }, { high24h: 70000, low24h: 64000 });
+assert.ok(session.dailyHigh);
+assert.ok(session.previousHigh);
+assert.ok(session.weeklyHigh);
+
+const indicators = computeIndicators(up);
+assert.ok(indicators.ema20);
+assert.ok(indicators.ema200);
+assert.ok(["none", "bullish", "bearish"].includes(indicators.rsiDivergence));
+assert.ok(indicators.macd);
+assert.ok(["none", "bullish_cross", "bearish_cross"].includes(indicators.macd.cross));
+
 const chart = analyzeChartIntelligence(
   {
-    "1d": makeCandles({ start: 55000, count: 100, drift: 80, wave: 200 }),
+    "1d": daily,
     "4h": up,
     "1h": up,
     "15m": makeCandles({ start: 64000, count: 120, drift: 5, wave: 40 }),
@@ -57,11 +77,18 @@ const chart = analyzeChartIntelligence(
     openInterest: { trend: "up" },
     cvd: { bias: "buy_pressure" },
     orderBook: { bias: "bid_heavy" },
+    high24h: 70000,
+    low24h: 64000,
+    liquidations: [{ price: 64800, side: "SELL", qty: 1 }],
   },
 );
 
 assert.equal(chart.available, true);
 assert.ok(chart.checklistText.includes("Chart Intelligence"));
+assert.ok(chart.checklistText.includes("Pattern alone"));
+assert.ok(chart.session_levels);
+assert.ok(chart.htf.levels.volumeAreas?.poc || chart.htf.levels.vwap);
+assert.ok(Array.isArray(chart.liquidity.liquidity_pools));
 assert.ok(chart.setup);
 assert.ok(chart.setup.rule.includes("Pattern alone"));
 
@@ -90,6 +117,7 @@ const bundle = {
 const score = scoreMarketBundle(bundle);
 assert.ok(score.components);
 assert.ok(typeof score.components.technical === "number");
+assert.ok(typeof score.components.pattern === "number");
 assert.ok(score.chart_setup);
 
 const plan = normalizeTradingPlan(

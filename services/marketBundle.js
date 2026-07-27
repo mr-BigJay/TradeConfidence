@@ -238,11 +238,21 @@ async function collectMarketBundle(symbol, options = {}) {
 
   let chart = null;
   if (includeChart) {
+    let liquidations = [];
+    try {
+      const { getWsState } = require("./providers/binanceWsCollector");
+      liquidations = getWsState()?.liquidations || [];
+    } catch {
+      liquidations = [];
+    }
     chart = analyzeChartIntelligence(settled.candles || {}, {
       fundingRatePercent: settled.binance?.fundingRatePercent,
       openInterest: settled.binance?.openInterest,
       cvd: settled.binance?.cvd,
       orderBook: settled.binance?.orderBook,
+      high24h: settled.binance?.high24h,
+      low24h: settled.binance?.low24h,
+      liquidations,
     });
     logger.info("Chart intelligence ready", {
       symbol,

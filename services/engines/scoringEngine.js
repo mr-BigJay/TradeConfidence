@@ -54,8 +54,16 @@ function scoreMarketBundle(bundle) {
   const htfStructure = chart.htf?.structure?.structure || "";
   if (htfTrend === "Bullish" || /Bullish/i.test(htfStructure)) technicalScore += 12;
   if (htfTrend === "Bearish" || /Bearish/i.test(htfStructure)) technicalScore -= 12;
+  if (chart.htf?.indicators?.emaStack === "bullish_stack") technicalScore += 3;
+  if (chart.htf?.indicators?.emaStack === "bearish_stack") technicalScore -= 3;
   if (chart.ltf?.indicators?.macd?.bias === "bullish") technicalScore += 4;
   if (chart.ltf?.indicators?.macd?.bias === "bearish") technicalScore -= 4;
+  if (chart.ltf?.indicators?.macd?.cross === "bullish_cross") technicalScore += 2;
+  if (chart.ltf?.indicators?.macd?.cross === "bearish_cross") technicalScore -= 2;
+  if (chart.ltf?.indicators?.rsiDivergence === "bullish") technicalScore += 3;
+  if (chart.ltf?.indicators?.rsiDivergence === "bearish") technicalScore -= 3;
+  if (chart.ltf?.indicators?.stochState === "oversold") technicalScore += 1;
+  if (chart.ltf?.indicators?.stochState === "overbought") technicalScore -= 1;
   if (chart.ltf?.volume?.confirmation === "trend_confirmed") technicalScore += 4;
   if (chart.ltf?.volume?.confirmation === "weak_rally") technicalScore -= 2;
   if (setup.technical_confirmation?.passed) technicalScore += 5;

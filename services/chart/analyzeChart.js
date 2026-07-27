@@ -112,7 +112,83 @@ function computeVwap(candles, lookback = 48) {
   return vol > 0 ? pv / vol : null;
 }
 
-function detectSupportsResistances(candles, structure) {
+/**
+ * Simple volume-profile style areas from recent candles (POC + HVN).
+ */
+function computeVolumeAreas(candles, lookback = 80, buckets = 24) {
+  const slice = candles.slice(-lookback);
+  if (slice.length < 10) {
+    return { poc: null, highVolumeNodes: [], lowVolumeNodes: [] };
+  }
+  const high = Math.max(...slice.map((c) => c.high));
+  const low = Math.min(...slice.map((c) => c.low));
+  const span = high - low;
+  if (span <= 0) {
+    return { poc: null, highVolumeNodes: [], lowVolumeNodes: [] };
+  }
+  const step = span / buckets;
+  const vols = new Array(buckets).fill(0);
+  for (const candle of slice) {
+    const typical = (candle.high + candle.low + candle.close) / 3;
+    const idx = Math.min(buckets - 1, Math.max(0, Math.floor((typical - low) / step)));
+    vols[idx] += candle.volume || 0;
+  }
+  let pocIdx = 0;
+  for (let i = 1; i < vols.length; i += 1) {
+    if (vols[i] > vols[pocIdx]) pocIdx = i;
+  }
+  const ranked = vols
+    .map((volume, index) => ({
+      index,
+      volume,
+      price: round(low + step * (index + 0.5), 1),
+    }))
+    .sort((a, b) => b.volume - a.volume);
+  const highVolumeNodes = ranked.slice(0, 3).map((item) => item.price);
+  const lowVolumeNodes = ranked
+    .slice(-3)
+    .map((item) => item.price)
+    .sort((a, b) => a - b);
+  return {
+    poc: ranked[0]?.price ?? null,
+    highVolumeNodes,
+    lowVolumeNodes,
+  };
+}
+
+/**
+ * Calendar-style previous / daily / weekly levels from 1D candles when available.
+ */
+function extractSessionLevels(candlesByTf = {}, futuresContext = {}) {
+  const daily = candlesByTf["1d"] || [];
+  const lastDaily = daily[daily.length - 1];
+  const prevDaily = daily[daily.length - 2];
+  const weekSlice = daily.slice(-7);
+
+  const dailyHigh =
+    lastDaily?.high ??
+    (Number.isFinite(futuresContext.high24h) ? Number(futuresContext.high24h) : null);
+  const dailyLow =
+    lastDaily?.low ??
+    (Number.isFinite(futuresContext.low24h) ? Number(futuresContext.low24h) : null);
+  const previousHigh = prevDaily?.high ?? null;
+  const previousLow = prevDaily?.low ?? null;
+  const weeklyHigh = weekSlice.length
+    ? Math.max(...weekSlice.map((c) => c.high))
+    : null;
+  const weeklyLow = weekSlice.length ? Math.min(...weekSlice.map((c) => c.low)) : null;
+
+  return {
+    previousHigh: round(previousHigh, 1),
+    previousLow: round(previousLow, 1),
+    dailyHigh: round(dailyHigh, 1),
+    dailyLow: round(dailyLow, 1),
+    weeklyHigh: round(weeklyHigh, 1),
+    weeklyLow: round(weeklyLow, 1),
+  };
+}
+
+function detectSupportsResistances(candles, structure, sessionLevels = {}, volumeAreas = {}) {
   if (!candles.length) {
     return {
       majorSupport: [],
@@ -122,16 +198,30 @@ function detectSupportsResistances(candles, structure) {
       vwap: null,
       dailyHigh: null,
       dailyLow: null,
+      previousHigh: null,
+      previousLow: null,
+      volumeAreas: { poc: null, highVolumeNodes: [], lowVolumeNodes: [] },
     };
   }
 
   const last = candles[candles.length - 1];
+  // Fallback only when calendar session levels are unavailable.
   const day = candles.slice(-24);
   const week = candles.slice(-24 * 7);
-  const dailyHigh = Math.max(...day.map((c) => c.high));
-  const dailyLow = Math.min(...day.map((c) => c.low));
-  const weeklyHigh = Math.max(...week.map((c) => c.high));
-  const weeklyLow = Math.min(...week.map((c) => c.low));
+  const dailyHigh =
+    sessionLevels.dailyHigh ?? Math.max(...day.map((c) => c.high));
+  const dailyLow =
+    sessionLevels.dailyLow ?? Math.min(...day.map((c) => c.low));
+  const weeklyHigh =
+    sessionLevels.weeklyHigh ?? Math.max(...week.map((c) => c.high));
+  const weeklyLow =
+    sessionLevels.weeklyLow ?? Math.min(...week.map((c) => c.low));
+  const previousHigh = sessionLevels.previousHigh ?? null;
+  const previousLow = sessionLevels.previousLow ?? null;
+  const areas =
+    volumeAreas?.poc != null
+      ? volumeAreas
+      : computeVolumeAreas(candles, Math.min(80, candles.length));
   const vwap = computeVwap(candles, Math.min(48, candles.length));
   const price = last.close;
 
@@ -142,7 +232,11 @@ function detectSupportsResistances(candles, structure) {
     dailyLow,
     weeklyHigh,
     weeklyLow,
+    previousHigh,
+    previousLow,
     vwap,
+    areas.poc,
+    ...(areas.highVolumeNodes || []),
     ...(structure.recentLows || []),
     ...(structure.recentHighs || []),
   ]
@@ -163,6 +257,13 @@ function detectSupportsResistances(candles, structure) {
     dailyLow: round(dailyLow, 1),
     weeklyHigh: round(weeklyHigh, 1),
     weeklyLow: round(weeklyLow, 1),
+    previousHigh: round(previousHigh, 1),
+    previousLow: round(previousLow, 1),
+    volumeAreas: {
+      poc: areas.poc ?? null,
+      highVolumeNodes: areas.highVolumeNodes || [],
+      lowVolumeNodes: areas.lowVolumeNodes || [],
+    },
   };
 }
 
@@ -179,10 +280,19 @@ function computeIndicators(candles) {
   const e200 = ema200[ema200.length - 1];
   const e20Prev = ema20[ema20.length - 5];
   const e50Prev = ema50[ema50.length - 5];
+  const e100Prev = ema100[Math.max(0, ema100.length - 5)];
+  const e200Prev = ema200[Math.max(0, ema200.length - 5)];
 
   let trend = "Neutral";
-  if (last && e20 && e50 && last > e20 && e20 > e50) trend = "Bullish";
-  if (last && e20 && e50 && last < e20 && e20 < e50) trend = "Bearish";
+  const bullishStack =
+    last && e20 && e50 && last > e20 && e20 > e50 && (!e100 || e50 >= e100 * 0.998);
+  const bearishStack =
+    last && e20 && e50 && last < e20 && e20 < e50 && (!e100 || e50 <= e100 * 1.002);
+  if (bullishStack || (last && e200 && last > e200 && e20 > e50)) trend = "Bullish";
+  if (bearishStack || (last && e200 && last < e200 && e20 < e50)) trend = "Bearish";
+  // Prefer stack when both sides fire weakly.
+  if (bullishStack && !bearishStack) trend = "Bullish";
+  if (bearishStack && !bullishStack) trend = "Bearish";
 
   const cross =
     e20 !== null && e50 !== null && e20Prev !== null && e50Prev !== null
@@ -193,17 +303,49 @@ function computeIndicators(candles) {
           : "none"
       : "none";
 
-  // RSI
-  let rsi = null;
+  // RSI series for state + divergence
+  const rsiSeries = [];
   if (closes.length > 15) {
-    let gains = 0;
-    let losses = 0;
-    for (let i = closes.length - 14; i < closes.length; i += 1) {
-      const diff = closes[i] - closes[i - 1];
-      if (diff >= 0) gains += diff;
-      else losses -= diff;
+    for (let i = 15; i < closes.length; i += 1) {
+      let g = 0;
+      let l = 0;
+      for (let j = i - 13; j <= i; j += 1) {
+        const d = closes[j] - closes[j - 1];
+        if (d >= 0) g += d;
+        else l -= d;
+      }
+      rsiSeries.push(l === 0 ? 100 : 100 - 100 / (1 + g / l));
     }
-    rsi = losses === 0 ? 100 : 100 - 100 / (1 + gains / losses);
+  }
+  const rsi = rsiSeries.length ? rsiSeries[rsiSeries.length - 1] : null;
+
+  let rsiDivergence = "none";
+  if (closes.length >= 30 && rsiSeries.length >= 20) {
+    const priceWindow = closes.slice(-20);
+    const rsiWindow = rsiSeries.slice(-20);
+    const priceLowIdx = priceWindow.reduce(
+      (best, value, idx) => (value < priceWindow[best] ? idx : best),
+      0,
+    );
+    const priceHighIdx = priceWindow.reduce(
+      (best, value, idx) => (value > priceWindow[best] ? idx : best),
+      0,
+    );
+    const lastPrice = priceWindow[priceWindow.length - 1];
+    const lastRsi = rsiWindow[rsiWindow.length - 1];
+    if (
+      lastPrice < priceWindow[priceLowIdx] * 1.001 &&
+      lastRsi > rsiWindow[priceLowIdx] + 3 &&
+      priceLowIdx < priceWindow.length - 3
+    ) {
+      rsiDivergence = "bullish";
+    } else if (
+      lastPrice > priceWindow[priceHighIdx] * 0.999 &&
+      lastRsi < rsiWindow[priceHighIdx] - 3 &&
+      priceHighIdx < priceWindow.length - 3
+    ) {
+      rsiDivergence = "bearish";
+    }
   }
 
   // MACD
@@ -219,21 +361,22 @@ function computeIndicators(candles) {
   const macd = macdLine[macdLine.length - 1];
   const macdSignal = signal[signal.length - 1];
   const hist = macd !== null && macdSignal !== null ? macd - macdSignal : null;
+  const prevMacd = macdLine[macdLine.length - 2];
+  const prevSignal = signal[signal.length - 2];
+  let macdCross = "none";
+  if (
+    prevMacd !== null &&
+    prevSignal !== null &&
+    macd !== null &&
+    macdSignal !== null
+  ) {
+    if (prevMacd <= prevSignal && macd > macdSignal) macdCross = "bullish_cross";
+    if (prevMacd >= prevSignal && macd < macdSignal) macdCross = "bearish_cross";
+  }
 
-  // Stoch RSI proxy
+  // Stoch RSI
   let stochRsi = null;
-  if (rsi !== null) {
-    const rsiSeries = [];
-    for (let i = 15; i < closes.length; i += 1) {
-      let g = 0;
-      let l = 0;
-      for (let j = i - 13; j <= i; j += 1) {
-        const d = closes[j] - closes[j - 1];
-        if (d >= 0) g += d;
-        else l -= d;
-      }
-      rsiSeries.push(l === 0 ? 100 : 100 - 100 / (1 + g / l));
-    }
+  if (rsiSeries.length >= 14) {
     const window = rsiSeries.slice(-14);
     const min = Math.min(...window);
     const max = Math.max(...window);
@@ -253,20 +396,52 @@ function computeIndicators(candles) {
           ? "above_ema20"
           : "below_ema20"
         : "unknown",
+    emaStack:
+      e20 && e50 && e100 && e200
+        ? e20 > e50 && e50 > e100 && e100 > e200
+          ? "bullish_stack"
+          : e20 < e50 && e50 < e100 && e100 < e200
+            ? "bearish_stack"
+            : "mixed"
+        : "unknown",
     trend,
     emaCross: cross,
     emaSlope:
       e20 !== null && e20Prev !== null ? (e20 > e20Prev ? "up" : e20 < e20Prev ? "down" : "flat") : "unknown",
+    ema100Slope:
+      e100 !== null && e100Prev !== null
+        ? e100 > e100Prev
+          ? "up"
+          : e100 < e100Prev
+            ? "down"
+            : "flat"
+        : "unknown",
+    ema200Slope:
+      e200 !== null && e200Prev !== null
+        ? e200 > e200Prev
+          ? "up"
+          : e200 < e200Prev
+            ? "down"
+            : "flat"
+        : "unknown",
     vwap: round(vwap, 1),
     fairValueBias:
       last && vwap ? (last > vwap ? "above_vwap" : last < vwap ? "below_vwap" : "at_vwap") : "unknown",
     rsi: round(rsi, 2),
     rsiState: rsi === null ? "unknown" : rsi >= 70 ? "overbought" : rsi <= 30 ? "oversold" : "neutral",
+    rsiDivergence,
     macd: {
       macd: round(macd, 2),
       signal: round(macdSignal, 2),
       histogram: round(hist, 2),
       bias: hist === null ? "unknown" : hist >= 0 ? "bullish" : "bearish",
+      cross: macdCross,
+      momentum:
+        hist === null
+          ? "unknown"
+          : Math.abs(hist) > Math.abs((prevMacd ?? 0) - (prevSignal ?? 0))
+            ? "expanding"
+            : "contracting",
     },
     stochRsi: round(stochRsi, 2),
     stochState:
@@ -274,7 +449,7 @@ function computeIndicators(candles) {
   };
 }
 
-function analyzeVolume(candles) {
+function analyzeVolume(candles, futuresContext = {}) {
   if (candles.length < 20) {
     return { state: "unknown", note: "insufficient candles" };
   }
@@ -304,6 +479,13 @@ function analyzeVolume(candles) {
       ? "volume_divergence"
       : "none";
 
+  const fused = [];
+  if (futuresContext.cvd?.bias) fused.push(`CVD=${futuresContext.cvd.bias}`);
+  if (futuresContext.openInterest?.trend) fused.push(`OI=${futuresContext.openInterest.trend}`);
+  if (futuresContext.fundingRatePercent !== undefined && futuresContext.fundingRatePercent !== null) {
+    fused.push(`Funding=${futuresContext.fundingRatePercent}`);
+  }
+
   return {
     state,
     confirmation,
@@ -311,6 +493,8 @@ function analyzeVolume(candles) {
     lastVolume: round(last, 2),
     avgVolume20: round(avg, 2),
     breakoutVolume: last > avg * 1.8,
+    market_fusion: fused,
+    note: fused.length ? `Volume combined with ${fused.join(", ")}` : null,
   };
 }
 
@@ -540,12 +724,37 @@ function computeFibonacci(candles) {
 
 function analyzeLiquidity(candles, levels, futuresContext = {}) {
   if (!candles.length) {
-    return { state: "unknown", notes: [] };
+    return { state: "unknown", notes: [], liquidity_pools: [] };
   }
   const last = candles[candles.length - 1];
   const prev = candles[candles.length - 2] || last;
   const notes = [];
   let state = "neutral";
+
+  const pools = [
+    ...(levels.majorSupport || []).map((price) => ({ side: "bid_liquidity", price })),
+    ...(levels.majorResistance || []).map((price) => ({ side: "ask_liquidity", price })),
+    ...(levels.volumeAreas?.highVolumeNodes || []).map((price) => ({
+      side: "volume_node",
+      price,
+    })),
+  ]
+    .filter((item) => Number.isFinite(item.price))
+    .slice(0, 6);
+
+  const liquidations = Array.isArray(futuresContext.liquidations)
+    ? futuresContext.liquidations
+    : [];
+  if (liquidations.length) {
+    const prices = liquidations
+      .map((item) => Number(item.price))
+      .filter((price) => Number.isFinite(price));
+    if (prices.length) {
+      const avgLiq = prices.reduce((a, b) => a + b, 0) / prices.length;
+      pools.push({ side: "liquidation_cluster", price: round(avgLiq, 1) });
+      notes.push(`خوشه لیکوییدیشن نزدیک ${round(avgLiq, 1)}`);
+    }
+  }
 
   const sweptLow =
     levels.majorSupport?.[0] &&
@@ -571,15 +780,34 @@ function analyzeLiquidity(candles, levels, futuresContext = {}) {
   if (futuresContext.cvd?.bias === "buy_pressure") notes.push("CVD با فشار خرید هم‌راستا است");
   if (futuresContext.cvd?.bias === "sell_pressure") notes.push("CVD با فشار فروش هم‌راستا است");
 
+  const confirmedBreakout =
+    (sweptHigh &&
+      futuresContext.cvd?.bias === "buy_pressure" &&
+      book.bias !== "ask_heavy") ||
+    (sweptLow &&
+      futuresContext.cvd?.bias === "sell_pressure" &&
+      book.bias !== "bid_heavy");
+  if (confirmedBreakout) {
+    notes.push("تایید شکست با CVD/OrderBook");
+    state = sweptHigh ? "breakout_confirmation_high" : "breakout_confirmation_low";
+  }
+
   const fakeBreakout =
-    (sweptHigh && futuresContext.cvd?.bias !== "buy_pressure") ||
-    (sweptLow && futuresContext.cvd?.bias !== "sell_pressure");
+    !confirmedBreakout &&
+    ((sweptHigh && futuresContext.cvd?.bias !== "buy_pressure") ||
+      (sweptLow && futuresContext.cvd?.bias !== "sell_pressure"));
   if (fakeBreakout) notes.push("ریسک شکست جعلی وجود دارد");
 
   return {
     state,
     fake_breakout_risk: Boolean(fakeBreakout),
-    stop_hunt_area: sweptLow ? levels.majorSupport?.[0] : sweptHigh ? levels.majorResistance?.[0] : null,
+    breakout_confirmation: Boolean(confirmedBreakout),
+    stop_hunt_area: sweptLow
+      ? levels.majorSupport?.[0]
+      : sweptHigh
+        ? levels.majorResistance?.[0]
+        : null,
+    liquidity_pools: pools,
     notes,
   };
 }
@@ -704,10 +932,27 @@ function buildChartSetup({ htf, ltf, futuresContext = {} }) {
   if (ltf.indicators?.rsiState === "oversold" || ltf.indicators?.rsiState === "overbought") {
     technicalConfirmation.reasons.push(`RSI=${ltf.indicators.rsiState}`);
   }
+  if (ltf.indicators?.rsiDivergence && ltf.indicators.rsiDivergence !== "none") {
+    technicalConfirmation.reasons.push(`RSI divergence=${ltf.indicators.rsiDivergence}`);
+  }
+  if (ltf.indicators?.macd?.cross && ltf.indicators.macd.cross !== "none") {
+    technicalConfirmation.reasons.push(`MACD=${ltf.indicators.macd.cross}`);
+  }
+  if (ltf.indicators?.stochState === "oversold" || ltf.indicators?.stochState === "overbought") {
+    technicalConfirmation.reasons.push(`StochRSI timing=${ltf.indicators.stochState}`);
+  }
+  if (htf.indicators?.emaStack === "bullish_stack" || htf.indicators?.emaStack === "bearish_stack") {
+    technicalConfirmation.reasons.push(`EMA stack=${htf.indicators.emaStack}`);
+  }
   if (htf.levels?.majorSupport?.[0] && htf.levels?.majorResistance?.[0]) {
     technicalConfirmation.reasons.push("S/R mapped");
   }
-  technicalConfirmation.passed = technicalConfirmation.reasons.length >= 2;
+  // Pattern alone is listed but cannot be the only technical reason for a directional trade.
+  const nonPatternReasons = technicalConfirmation.reasons.filter(
+    (reason) => !String(reason).startsWith("Pattern="),
+  );
+  technicalConfirmation.passed =
+    technicalConfirmation.reasons.length >= 2 && nonPatternReasons.length >= 1;
 
   const price = ltf.price;
   const majorSupport = htf.levels?.majorSupport?.[0] || ltf.levels?.majorSupport?.[0];
@@ -813,7 +1058,7 @@ function buildChartSetup({ htf, ltf, futuresContext = {} }) {
   };
 }
 
-function analyzeTimeframe(candles, timeframe) {
+function analyzeTimeframe(candles, timeframe, options = {}) {
   if (!candles?.length) {
     return {
       timeframe,
@@ -822,9 +1067,15 @@ function analyzeTimeframe(candles, timeframe) {
     };
   }
   const structure = detectStructure(candles);
-  const levels = detectSupportsResistances(candles, structure);
+  const volumeAreas = computeVolumeAreas(candles, Math.min(80, candles.length));
+  const levels = detectSupportsResistances(
+    candles,
+    structure,
+    options.sessionLevels || {},
+    volumeAreas,
+  );
   const indicators = computeIndicators(candles);
-  const volume = analyzeVolume(candles);
+  const volume = analyzeVolume(candles, options.futuresContext || {});
   const patterns = detectPatterns(candles, timeframe);
   const fibonacci = computeFibonacci(candles);
 
@@ -843,9 +1094,13 @@ function analyzeTimeframe(candles, timeframe) {
 
 function analyzeChartIntelligence(candlesByTf = {}, futuresContext = {}) {
   const frames = ["1d", "4h", "1h", "15m", "5m"];
+  const sessionLevels = extractSessionLevels(candlesByTf, futuresContext);
   const analyzed = {};
   for (const tf of frames) {
-    analyzed[tf] = analyzeTimeframe(candlesByTf[tf] || [], tf);
+    analyzed[tf] = analyzeTimeframe(candlesByTf[tf] || [], tf, {
+      sessionLevels,
+      futuresContext,
+    });
   }
 
   const htf = {
@@ -890,12 +1145,15 @@ function analyzeChartIntelligence(candlesByTf = {}, futuresContext = {}) {
     `Structure: ${htf.structure?.structure || "n/a"} (${htf.structure?.detail || ""})`,
     `Major Support: ${(htf.levels?.majorSupport || []).join(", ") || "n/a"}`,
     `Major Resistance: ${(htf.levels?.majorResistance || []).join(", ") || "n/a"}`,
-    `VWAP: ${htf.levels?.vwap ?? "n/a"} | Trend: ${htf.indicators?.trend || "n/a"} | RSI: ${ltf.indicators?.rsi ?? "n/a"}`,
-    `MACD: ${ltf.indicators?.macd?.bias || "n/a"} | Volume: ${ltf.volume?.confirmation || "n/a"}`,
+    `Prev H/L: ${sessionLevels.previousHigh ?? "n/a"} / ${sessionLevels.previousLow ?? "n/a"} | Daily H/L: ${sessionLevels.dailyHigh ?? "n/a"} / ${sessionLevels.dailyLow ?? "n/a"} | Weekly H/L: ${sessionLevels.weeklyHigh ?? "n/a"} / ${sessionLevels.weeklyLow ?? "n/a"}`,
+    `VWAP: ${htf.levels?.vwap ?? "n/a"} | POC: ${htf.levels?.volumeAreas?.poc ?? "n/a"} | Trend: ${htf.indicators?.trend || "n/a"} | EMA stack: ${htf.indicators?.emaStack || "n/a"}`,
+    `RSI: ${ltf.indicators?.rsi ?? "n/a"} (${ltf.indicators?.rsiDivergence || "none"}) | MACD: ${ltf.indicators?.macd?.bias || "n/a"} cross=${ltf.indicators?.macd?.cross || "none"} | StochRSI: ${ltf.indicators?.stochState || "n/a"}`,
+    `Volume: ${ltf.volume?.confirmation || "n/a"} ${ltf.volume?.note || ""}`.trim(),
     `Top Pattern: ${topPattern ? `${topPattern.name} ${topPattern.timeframe} conf=${topPattern.confidence}` : "none"}`,
-    `Fib 0.618: ${htf.fibonacci?.levels?.["0.618"] ?? "n/a"} | Liquidity: ${liquidity.state}`,
+    `Fib 0.618: ${htf.fibonacci?.levels?.["0.618"] ?? "n/a"} | Liquidity: ${liquidity.state} pools=${(liquidity.liquidity_pools || []).length}`,
     `Setup: ${setup.direction} allowed=${setup.trade_allowed} marketOK=${setup.market_confirmation.passed} techOK=${setup.technical_confirmation.passed} riskOK=${setup.risk_management.passed}`,
     `Entry=${setup.risk_management.entry || "n/a"} SL=${setup.risk_management.stop_loss || "n/a"} TP1=${setup.risk_management.tp1 || "n/a"} RR=${setup.risk_management.risk_reward || "n/a"}`,
+    "Rule: Pattern alone never creates a trade. Need Market + Technical + Risk.",
   ].join("\n");
 
   return {
@@ -903,6 +1161,7 @@ function analyzeChartIntelligence(candlesByTf = {}, futuresContext = {}) {
     role: "technical_chart_analysis",
     available: Object.values(analyzed).some((item) => item.available),
     multi_timeframe: multiTfSummary,
+    session_levels: sessionLevels,
     timeframes: analyzed,
     htf,
     ltf,
@@ -918,6 +1177,10 @@ module.exports = {
   analyzeTimeframe,
   detectStructure,
   detectPatterns,
+  detectSupportsResistances,
   computeFibonacci,
+  computeVolumeAreas,
+  extractSessionLevels,
+  computeIndicators,
   buildChartSetup,
 };
