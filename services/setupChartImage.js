@@ -354,6 +354,8 @@ async function renderDailySetupChart(plan, meta = {}) {
   }
 }
 
+const { formatDecisionWhyBlock } = require("./decisionWhy");
+
 function formatSetupChartCaption(plan, meta = {}) {
   const styleNote =
     plan.direction === "RANGE" && /bear/i.test(String(plan.bias || ""))
@@ -370,8 +372,10 @@ function formatSetupChartCaption(plan, meta = {}) {
     `ورود: ${plan.entry || "-"}`,
     `حد سود: TP1 ${plan.tp1 || "-"} | TP2 ${plan.tp2 || "-"} | TP3 ${plan.tp3 || "-"}`,
     `حد ضرر: ${plan.stop_loss || "-"} | نسبت سود به زیان: ${plan.risk_reward || "-"}`,
+    "",
+    formatDecisionWhyBlock(plan, meta.engineScore || {}),
   ]
-    .filter(Boolean)
+    .filter((line) => line != null && line !== "")
     .join("\n");
 }
 

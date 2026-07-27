@@ -123,7 +123,7 @@ async function runDailySetup(options = {}) {
 
       const chartCaption = [
         replacing ? "به‌روزرسانی ستاپ امروز (جایگزین نسخه قبلی)" : null,
-        formatSetupChartCaption(plan, { iranDate }),
+        formatSetupChartCaption(plan, { iranDate, engineScore }),
       ]
         .filter(Boolean)
         .join("\n");
