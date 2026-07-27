@@ -313,6 +313,11 @@ function formatDailyTradingPlanMessage(plan, meta = {}) {
     "سناریوی کندل روز",
     "========================",
     `کندل بسته‌شده دیروز: ${plan.closed_daily_candle?.color_fa || meta.engineScore?.day_outlook?.closed_candle?.color_fa || "-"}`,
+    plan.closed_daily_candle?.open != null && plan.closed_daily_candle?.close != null
+      ? `OHLC دیروز: O ${plan.closed_daily_candle.open} → C ${plan.closed_daily_candle.close}`
+      : meta.engineScore?.day_outlook?.closed_candle?.open != null
+        ? `OHLC دیروز: O ${meta.engineScore.day_outlook.closed_candle.open} → C ${meta.engineScore.day_outlook.closed_candle.close}`
+        : null,
     `پیش‌بینی کندل امروز: ${plan.day_outlook_fa || meta.engineScore?.day_outlook?.expected_day_candle_fa || "خنثی"}`,
     `اطمینان سناریو: ${plan.day_outlook_confidence ?? meta.engineScore?.day_outlook?.confidence ?? plan.confidence ?? 0}%`,
     plan.day_outlook_summary ||

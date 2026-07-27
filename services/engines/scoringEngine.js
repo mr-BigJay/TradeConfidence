@@ -19,33 +19,14 @@ function scoreMarketBundle(bundle) {
   const setup = chart.setup || {};
 
   const dayOutlook = buildDayOutlook({
-    dailyCandles: (() => {
-      const closed = chart.day_outlook?.closed_candle;
-      if (closed && Number.isFinite(closed.open) && Number.isFinite(closed.close)) {
-        return [
-          { ...closed, time: Number(closed.time || Date.now() - 24 * 60 * 60 * 1000) },
-          {
-            open: closed.close,
-            high: closed.close,
-            low: closed.close,
-            close: closed.close,
-            time: Date.now(),
-          },
-        ];
-      }
-      return [];
-    })(),
+    dailyCandles: chart.daily_candles_tail || [],
     chart,
     futures,
     options,
     validation,
   });
 
-  // Prefer richer closed-candle metadata from chart intelligence when present.
-  const refinedOutlook = {
-    ...dayOutlook,
-    closed_candle: chart.day_outlook?.closed_candle || dayOutlook.closed_candle,
-  };
+  const refinedOutlook = dayOutlook;
 
   // Component scores on a 0-100-ish contribution scale used in final blend.
   let coinexScore = 0;

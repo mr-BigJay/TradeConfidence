@@ -13,19 +13,31 @@ assert.equal(candleColor({ open: 100, close: 99 }), "red");
 assert.equal(candleColor({ open: 100, close: 100 }), "neutral");
 
 const now = Date.now();
+const dayMs = 24 * 3600 * 1000;
 const closed = pickClosedDailyCandle(
   [
-    { open: 1, high: 2, low: 0.5, close: 1.5, time: now - 24 * 3600 * 1000 },
+    { open: 1, high: 2, low: 0.5, close: 1.5, time: now - dayMs },
     { open: 1.5, high: 1.6, low: 1.4, close: 1.55, time: now - 30 * 60 * 1000 },
   ],
   now,
 );
 assert.equal(closed.close, 1.5);
 
+// Late-day regression: in-progress daily candle older than 6h must NOT be treated as yesterday.
+const lateDay = pickClosedDailyCandle(
+  [
+    { open: 64000, high: 66000, low: 63800, close: 65500, time: now - dayMs }, // yesterday GREEN
+    { open: 65500, high: 65600, low: 65000, close: 65100, time: now - 14 * 3600 * 1000 }, // today RED forming
+  ],
+  now,
+);
+assert.equal(lateDay.close, 65500);
+assert.equal(candleColor(lateDay), "green");
+
 const outlook = buildDayOutlook({
   dailyCandles: [
-    { open: 60000, high: 62000, low: 59000, close: 61500, time: now - 24 * 3600 * 1000 },
-    { open: 61500, high: 61600, low: 61400, close: 61520, time: now - 20 * 60 * 1000 },
+    { open: 60000, high: 62000, low: 59000, close: 61500, time: now - dayMs },
+    { open: 61500, high: 61600, low: 61400, close: 61000, time: now - 14 * 3600 * 1000 },
   ],
   chart: {
     htf: {
@@ -72,6 +84,10 @@ const score = scoreMarketBundle({
   chart: {
     available: true,
     day_outlook: outlook,
+    daily_candles_tail: [
+      { open: 60000, high: 62000, low: 59000, close: 61500, time: Date.now() - 24 * 3600 * 1000 },
+      { open: 61500, high: 61600, low: 61400, close: 61000, time: Date.now() - 14 * 3600 * 1000 },
+    ],
     htf: outlook && {
       structure: { structure: "Bullish Structure" },
       indicators: { trend: "Bullish", emaStack: "bullish_stack" },
@@ -92,6 +108,7 @@ const score = scoreMarketBundle({
 
 assert.ok(score.day_outlook);
 assert.equal(score.day_outlook.expected_day_candle, "green");
+assert.equal(score.day_outlook.closed_candle.color, "green");
 assert.ok(score.components.futures <= 20);
 
 console.log("day outlook tests passed");

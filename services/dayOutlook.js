@@ -3,6 +3,8 @@
  * Primary job: estimate whether the upcoming daily candle is likely green or red.
  */
 
+const DAY_MS = 24 * 60 * 60 * 1000;
+
 function candleColor(candle) {
   if (!candle || !Number.isFinite(candle.open) || !Number.isFinite(candle.close)) return null;
   if (candle.close > candle.open) return "green";
@@ -17,15 +19,22 @@ function colorFa(color) {
 }
 
 /**
- * At/after daily close, Binance usually already opened a brand-new 1D bar.
- * Prefer the previous completed bar when the last bar is younger than ~6h.
+ * Binance USDT-M 1D bars open at 00:00 UTC.
+ * While the latest bar is still forming (now < open+24h), the closed day is always previous.
+ * Never treat an in-progress daily candle as "دیروز".
  */
-function pickClosedDailyCandle(dailyCandles = [], nowMs = Date.now()) {
+function pickClosedDailyCandle(dailyCandles = [], nowMs = Date.now(), intervalMs = DAY_MS) {
   if (!Array.isArray(dailyCandles) || !dailyCandles.length) return null;
   const last = dailyCandles[dailyCandles.length - 1];
   const prev = dailyCandles[dailyCandles.length - 2] || null;
-  const ageMs = Number.isFinite(last?.time) ? nowMs - Number(last.time) : Infinity;
-  if (prev && ageMs < 6 * 60 * 60 * 1000) return prev;
+  const lastOpen = Number(last?.time);
+  if (!Number.isFinite(lastOpen)) return prev || last;
+
+  const lastStillForming = nowMs < lastOpen + intervalMs;
+  if (lastStillForming) {
+    return prev || last;
+  }
+  // Last bar already completed (e.g. exactly at/after close before API adds a new bar).
   return last;
 }
 
@@ -48,7 +57,13 @@ function buildDayOutlook({
   validation = {},
   nowMs = Date.now(),
 } = {}) {
-  const closed = pickClosedDailyCandle(dailyCandles, nowMs);
+  const series =
+    Array.isArray(dailyCandles) && dailyCandles.length
+      ? dailyCandles
+      : Array.isArray(chart.daily_candles_tail)
+        ? chart.daily_candles_tail
+        : [];
+  const closed = pickClosedDailyCandle(series, nowMs);
   const closedColor = candleColor(closed);
   const htf = chart.htf || {};
   const votes = { green: 0, red: 0, reasons: [] };
@@ -126,6 +141,9 @@ function buildDayOutlook({
           color: closedColor,
           color_fa: colorFa(closedColor),
           time: closed.time || null,
+          close_time: Number.isFinite(Number(closed.time))
+            ? Number(closed.time) + DAY_MS
+            : null,
         }
       : null,
     expected_day_candle: expected,
@@ -172,4 +190,5 @@ module.exports = {
   pickClosedDailyCandle,
   buildDayOutlook,
   evaluateOutlookHit,
+  DAY_MS,
 };

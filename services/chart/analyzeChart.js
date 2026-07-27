@@ -1214,6 +1214,7 @@ function analyzeChartIntelligence(candlesByTf = {}, futuresContext = {}) {
     multi_timeframe: multiTfSummary,
     session_levels: sessionLevels,
     day_outlook: dayOutlookSeed,
+    daily_candles_tail: (candlesByTf["1d"] || []).slice(-5),
     timeframes: analyzed,
     htf,
     ltf,

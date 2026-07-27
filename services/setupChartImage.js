@@ -369,7 +369,11 @@ function formatSetupChartCaption(plan, meta = {}) {
     meta.iranDate ? `تاریخ: ${meta.iranDate}` : null,
     `سناریوی کندل روز: ${plan.day_outlook_fa || meta.engineScore?.day_outlook?.expected_day_candle_fa || "خنثی"} (${plan.day_outlook_confidence ?? meta.engineScore?.day_outlook?.confidence ?? plan.confidence ?? 0}%)`,
     plan.closed_daily_candle?.color_fa || meta.engineScore?.day_outlook?.closed_candle?.color_fa
-      ? `کندل بسته‌شده: ${plan.closed_daily_candle?.color_fa || meta.engineScore.day_outlook.closed_candle.color_fa}`
+      ? `کندل بسته‌شده دیروز: ${plan.closed_daily_candle?.color_fa || meta.engineScore.day_outlook.closed_candle.color_fa}${
+          (plan.closed_daily_candle || meta.engineScore?.day_outlook?.closed_candle)?.open != null
+            ? ` (O ${(plan.closed_daily_candle || meta.engineScore.day_outlook.closed_candle).open} → C ${(plan.closed_daily_candle || meta.engineScore.day_outlook.closed_candle).close})`
+            : ""
+        }`
       : null,
     `بایاس: ${plan.bias || "Neutral"} | ${plan.direction || "RANGE"} | ${plan.confidence ?? 0}%`,
     styleNote,
