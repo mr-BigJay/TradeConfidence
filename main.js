@@ -6,6 +6,10 @@ const { runDailySetup } = require("./services/dailySetupPipeline");
 const { runIntradayMonitor } = require("./services/intradayPipeline");
 const { runScenarioCheck } = require("./services/scenarioCheckPipeline");
 const {
+  needsMorningBriefCatchUp,
+  isMorningDeliveryWatchWindow,
+} = require("./services/deliveryGuard");
+const {
   IRAN_TZ,
   formatIranClock,
   isPastIranDailyBriefTime,
@@ -29,8 +33,20 @@ function buildCronExpression(intervalMinutes) {
 
 async function runSafely(label, fn, options = {}) {
   if (isRunning) {
-    logger.warn("Previous pipeline run is still active, skipping this tick", { label });
-    return;
+    // Critical morning / scenario ticks must not be silently dropped.
+    if (options.queueIfBusy) {
+      logger.warn("Pipeline busy; retrying critical tick shortly", { label });
+      await new Promise((resolve) => setTimeout(resolve, 20_000));
+      if (isRunning) {
+        logger.error("Critical tick still blocked after wait; forcing skip flag clear risk", {
+          label,
+        });
+        return;
+      }
+    } else {
+      logger.warn("Previous pipeline run is still active, skipping this tick", { label });
+      return;
+    }
   }
 
   isRunning = true;
@@ -39,6 +55,31 @@ async function runSafely(label, fn, options = {}) {
   } finally {
     isRunning = false;
   }
+}
+
+async function ensureMorningBriefDelivered(reason = "catch_up") {
+  const symbol = config.coinex.symbols[0] || "BTCUSDT";
+  const check = await needsMorningBriefCatchUp(symbol);
+  if (!check.needed) {
+    logger.info("Morning brief already delivered", {
+      reason: check.reason,
+      iranDate: check.iranDate,
+      via: reason,
+    });
+    return { skipped: true, reason: check.reason };
+  }
+
+  logger.warn("Morning brief missing — forcing Telegram delivery now", {
+    reason: check.reason,
+    via: reason,
+    iranDate: check.iranDate,
+    iranNow: `${getIranDateString()} ${formatIranClock()}`,
+  });
+
+  return runSafely(`daily-${reason}`, runDailySetup, {
+    force: true,
+    queueIfBusy: true,
+  });
 }
 
 async function shutdown(signal) {
@@ -81,6 +122,10 @@ async function main() {
     return;
   }
 
+  if (!config.telegram.botToken || !config.telegram.chatId) {
+    throw new Error("TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID are required for scheduled reports");
+  }
+
   const dailyExpression = config.scheduler.dailyCron;
   const intradayEnabled = Boolean(config.scheduler.intradayEnabled);
   const scenarioCheckEnabled = Boolean(config.scheduler.scenarioCheckEnabled);
@@ -93,13 +138,15 @@ async function main() {
     pastBriefTime: isPastIranDailyBriefTime(),
     scenarioCheckEnabled,
     scenarioCheckCron: scenarioCheckEnabled ? scenarioCheckCron : "disabled",
+    deliveryWatchdog: "*/5 3-4 * * *",
     intradayEnabled,
     intradayCron: intradayEnabled
       ? buildCronExpression(config.scheduler.intervalMinutes)
       : "disabled",
     symbols: config.coinex.symbols,
+    telegramChatConfigured: Boolean(config.telegram.chatId),
     architecture:
-      "CoinEx + Binance + Deribit + Chart Intelligence → Daily setup chart (Entry/TP/SL)",
+      "03:30 brief + 11:30/19:30 scenario checks → Telegram (with delivery watchdog)",
   });
 
   try {
@@ -109,13 +156,9 @@ async function main() {
     logger.warn("Binance WS bootstrap skipped", { error: error.message });
   }
 
-  // Boot catch-up ONLY after 03:30 Iran, and only if today's plan is missing.
-  // Never create the morning brief early — that used to make 03:30 cron skip with already_exists.
+  // Boot: after 03:30, guarantee today's brief was delivered (force if missing/telegram failed).
   if (isPastIranDailyBriefTime()) {
-    logger.info("Boot catch-up: past 03:30 Iran; ensuring today's plan exists", {
-      iranNow: `${getIranDateString()} ${formatIranClock()}`,
-    });
-    await runSafely("daily-boot", runDailySetup, { force: false });
+    await ensureMorningBriefDelivered("boot");
   } else {
     logger.info("Boot catch-up skipped until 03:30 Iran daily brief", {
       iranNow: `${getIranDateString()} ${formatIranClock()}`,
@@ -123,7 +166,7 @@ async function main() {
     });
   }
 
-  // Scheduled morning brief always regenerates + sends (force), so Telegram is not skipped.
+  // 03:30 Iran: always regenerate + send.
   cron.schedule(
     dailyExpression,
     () => {
@@ -131,12 +174,14 @@ async function main() {
         iranNow: `${getIranDateString()} ${formatIranClock()}`,
         force: true,
       });
-      runSafely("daily-cron", runDailySetup, { force: true }).catch((error) => {
-        logger.error("Scheduled daily setup failed", {
-          error: error.message,
-          stack: error.stack,
-        });
-      });
+      runSafely("daily-cron", runDailySetup, { force: true, queueIfBusy: true }).catch(
+        async (error) => {
+          logger.error("Scheduled daily setup failed; watchdog will retry", {
+            error: error.message,
+            stack: error.stack,
+          });
+        },
+      );
     },
     { timezone: IRAN_TZ },
   );
@@ -147,25 +192,51 @@ async function main() {
     forceOnTick: true,
   });
 
+  // Safety net: every 5 minutes during 03:xx–04:xx, resend if Telegram delivery missing.
+  cron.schedule(
+    "*/5 3-4 * * *",
+    () => {
+      if (!isMorningDeliveryWatchWindow()) return;
+      ensureMorningBriefDelivered("watchdog").catch((error) => {
+        logger.error("Morning delivery watchdog failed", {
+          error: error.message,
+          stack: error.stack,
+        });
+      });
+    },
+    { timezone: IRAN_TZ },
+  );
+
+  logger.info("Morning delivery watchdog armed", {
+    expression: "*/5 3-4 * * *",
+    window: "03:35-04:30 Asia/Tehran",
+    timezone: IRAN_TZ,
+  });
+
+  // 11:30 and 19:30 Iran: scenario progress must always send.
   if (scenarioCheckEnabled) {
     cron.schedule(
       scenarioCheckCron,
       () => {
         logger.info("8h scenario check cron fired", {
           iranNow: `${getIranDateString()} ${formatIranClock()}`,
+          force: true,
         });
-        runSafely("scenario-cron", runScenarioCheck, { force: false }).catch((error) => {
-          logger.error("Scheduled scenario check failed", {
-            error: error.message,
-            stack: error.stack,
-          });
-        });
+        runSafely("scenario-cron", runScenarioCheck, { force: true, queueIfBusy: true }).catch(
+          (error) => {
+            logger.error("Scheduled scenario check failed", {
+              error: error.message,
+              stack: error.stack,
+            });
+          },
+        );
       },
       { timezone: IRAN_TZ },
     );
     logger.info("8h scenario check cron armed", {
       expression: scenarioCheckCron,
       timezone: IRAN_TZ,
+      forceOnTick: true,
     });
   } else {
     logger.info("8h scenario check disabled");
@@ -186,7 +257,7 @@ async function main() {
       { timezone: IRAN_TZ },
     );
   } else {
-    logger.info("Intraday monitoring disabled (daily setup chart only)");
+    logger.info("Intraday monitoring disabled (daily + 8h scenario checks only)");
   }
 }
 

@@ -179,27 +179,32 @@ async function sendTelegramMessage(text) {
     throw new Error("Telegram sendMessage refused empty text");
   }
 
-  const response = await fetch(
-    `https://api.telegram.org/bot${config.telegram.botToken}/sendMessage`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        chat_id: config.telegram.chatId,
-        text: cleaned.slice(0, 4096),
-        disable_web_page_preview: true,
-      }),
+  const { withRetries } = require("./deliveryGuard");
+  return withRetries(
+    async () => {
+      const response = await fetch(
+        `https://api.telegram.org/bot${config.telegram.botToken}/sendMessage`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            chat_id: config.telegram.chatId,
+            text: cleaned.slice(0, 4096),
+            disable_web_page_preview: true,
+          }),
+        },
+      );
+
+      const payload = await response.json();
+      if (!payload.ok) {
+        throw new Error(
+          `Telegram sendMessage failed: ${payload.description || response.status} (chat_id=${config.telegram.chatId})`,
+        );
+      }
+      return payload;
     },
+    { retries: 3, baseDelayMs: 1200, label: "telegram_sendMessage" },
   );
-
-  const payload = await response.json();
-  if (!payload.ok) {
-    throw new Error(
-      `Telegram sendMessage failed: ${payload.description || response.status} (chat_id=${config.telegram.chatId})`,
-    );
-  }
-
-  return payload;
 }
 
 async function sendTelegramPhoto(imagePath, caption) {
@@ -210,25 +215,32 @@ async function sendTelegramPhoto(imagePath, caption) {
     throw new Error(`Telegram photo missing: ${absolutePath}`);
   }
 
-  const form = new FormData();
-  form.append("chat_id", config.telegram.chatId);
-  form.append("caption", applyRtlForPersian(caption || "").slice(0, 1024));
-  form.append("photo", new Blob([fs.readFileSync(absolutePath)]), path.basename(absolutePath));
+  const { withRetries } = require("./deliveryGuard");
+  return withRetries(
+    async () => {
+      const form = new FormData();
+      form.append("chat_id", config.telegram.chatId);
+      form.append("caption", applyRtlForPersian(caption || "").slice(0, 1024));
+      form.append("photo", new Blob([fs.readFileSync(absolutePath)]), path.basename(absolutePath));
 
-  const response = await fetch(
-    `https://api.telegram.org/bot${config.telegram.botToken}/sendPhoto`,
-    {
-      method: "POST",
-      body: form,
+      const response = await fetch(
+        `https://api.telegram.org/bot${config.telegram.botToken}/sendPhoto`,
+        {
+          method: "POST",
+          body: form,
+        },
+      );
+
+      const payload = await response.json();
+      if (!payload.ok) {
+        throw new Error(
+          `Telegram sendPhoto failed: ${payload.description || response.status} (chat_id=${config.telegram.chatId})`,
+        );
+      }
+      return payload;
     },
+    { retries: 3, baseDelayMs: 1500, label: "telegram_sendPhoto" },
   );
-
-  const payload = await response.json();
-  if (!payload.ok) {
-    throw new Error(`Telegram sendPhoto failed: ${payload.description || response.status}`);
-  }
-
-  return payload;
 }
 
 async function sendMarketStatus(analysis, imagePath = null) {

@@ -228,6 +228,9 @@ async function runDailySetup(options = {}) {
       const messageIds = telegramResults
         .map((item) => item?.result?.message_id)
         .filter(Boolean);
+      if (!messageIds.length) {
+        throw new Error("Telegram daily plan returned no message_ids");
+      }
       logger.info("Telegram daily plan sent", {
         symbol,
         chunks: telegramResults.length,
@@ -258,6 +261,9 @@ async function runDailySetup(options = {}) {
           ...plan,
           engineScore,
           validation,
+          telegram_sent: true,
+          telegram_message_ids: messageIds,
+          telegram_sent_at: new Date().toISOString(),
           marketBundleSummary: {
             coinexAvailable: marketBundle.coinex?.available,
             coinexStale: Boolean(marketBundle.coinex?.stale),

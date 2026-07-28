@@ -7,9 +7,10 @@ const {
 const logger = require("../logger");
 const { collectMarketBundle } = require("./marketBundle");
 const { scoreMarketBundle } = require("./engines/scoringEngine");
-const { formatScenarioCheckMessage } = require("./scenarioProgress");
+const { formatScenarioCheckMessage, evaluateScenarioProgress } = require("./scenarioProgress");
 const { sendTelegramMessage, splitTelegramText } = require("./telegram");
 const { formatIranClock, getIranDateString, isPastIranDailyBriefTime } = require("./timeIran");
+const { runDailySetup } = require("./dailySetupPipeline");
 
 async function processScenarioCheck(symbol, options = {}) {
   const result = { symbol, ok: false, mode: "scenario_check" };
@@ -23,9 +24,17 @@ async function processScenarioCheck(symbol, options = {}) {
     return result;
   }
 
-  const dailySetup = await getActiveDailySetup(symbol, iranDate);
+  let dailySetup = await getActiveDailySetup(symbol, iranDate);
   if (!dailySetup) {
-    logger.warn("No morning plan for scenario check", { symbol, iranDate });
+    logger.warn("No morning plan for scenario check; forcing daily brief first", {
+      symbol,
+      iranDate,
+    });
+    await runDailySetup({ force: true });
+    dailySetup = await getActiveDailySetup(symbol, iranDate);
+  }
+  if (!dailySetup) {
+    logger.warn("Scenario check still has no morning plan", { symbol, iranDate });
     await saveEvent({
       symbol,
       event: "scenario_check_skip",
@@ -58,6 +67,9 @@ async function processScenarioCheck(symbol, options = {}) {
   for (const chunk of chunks) {
     const sent = await sendTelegramMessage(chunk);
     if (sent?.result?.message_id) messageIds.push(sent.result.message_id);
+  }
+  if (!messageIds.length) {
+    throw new Error("Scenario check Telegram returned no message_ids");
   }
 
   await saveSetupEvaluation({

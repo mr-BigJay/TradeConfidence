@@ -19,6 +19,7 @@ async function main() {
   console.log(`symbols: ${config.coinex.symbols.join(", ")}`);
   console.log(`dailyCron: ${config.scheduler.dailyCron} (${config.scheduler.timezone})`);
   console.log(`scenarioCheck: ${config.scheduler.scenarioCheckEnabled ? config.scheduler.scenarioCheckCron : "disabled"}`);
+  console.log(`deliveryWatchdog: */5 3-4 * * * (03:35-04:30 Iran)`);
   console.log(`intradayEnabled: ${config.scheduler.intradayEnabled}`);
   console.log(`intervalMinutes: ${config.scheduler.intervalMinutes}`);
   console.log(`cardMode: ${config.runtime.cardMode}`);
