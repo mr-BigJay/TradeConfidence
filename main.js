@@ -9,6 +9,7 @@ const {
   needsMorningBriefCatchUp,
   isMorningDeliveryWatchWindow,
 } = require("./services/deliveryGuard");
+const { startTelegramBotMenu, stopTelegramBotMenu } = require("./services/telegramBot");
 const {
   IRAN_TZ,
   formatIranClock,
@@ -84,6 +85,7 @@ async function ensureMorningBriefDelivered(reason = "catch_up") {
 
 async function shutdown(signal) {
   logger.info(`Received ${signal}, shutting down`);
+  stopTelegramBotMenu();
   await closeDb();
   process.exit(0);
 }
@@ -259,6 +261,9 @@ async function main() {
   } else {
     logger.info("Intraday monitoring disabled (daily + 8h scenario checks only)");
   }
+
+  // Interactive Telegram menu (Backtest pagination, etc.)
+  await startTelegramBotMenu();
 }
 
 main().catch(async (error) => {

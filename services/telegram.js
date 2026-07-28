@@ -491,6 +491,84 @@ async function sendTelegramTest(text = "BTC Analyzer test message ✅") {
   return sendTelegramMessage(text);
 }
 
+async function telegramApi(method, body = {}, { formData = null } = {}) {
+  requireTelegramConfig();
+  const { withRetries } = require("./deliveryGuard");
+  return withRetries(
+    async () => {
+      const url = `https://api.telegram.org/bot${config.telegram.botToken}/${method}`;
+      const response = formData
+        ? await fetch(url, { method: "POST", body: formData })
+        : await fetch(url, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body),
+          });
+      const payload = await response.json();
+      if (!payload.ok) {
+        throw new Error(
+          `Telegram ${method} failed: ${payload.description || response.status}`,
+        );
+      }
+      return payload;
+    },
+    { retries: 3, baseDelayMs: 1000, label: `telegram_${method}` },
+  );
+}
+
+async function sendTelegramMessageWithMarkup(text, replyMarkup, chatId = null) {
+  requireTelegramConfig();
+  const cleaned = applyRtlForPersian(String(text || "").trim());
+  if (!cleaned) throw new Error("Telegram sendMessage refused empty text");
+  return telegramApi("sendMessage", {
+    chat_id: chatId || config.telegram.chatId,
+    text: cleaned.slice(0, 4096),
+    disable_web_page_preview: true,
+    reply_markup: replyMarkup || undefined,
+  });
+}
+
+async function editTelegramMessage(chatId, messageId, text, replyMarkup = null) {
+  const cleaned = applyRtlForPersian(String(text || "").trim());
+  return telegramApi("editMessageText", {
+    chat_id: chatId,
+    message_id: messageId,
+    text: cleaned.slice(0, 4096),
+    disable_web_page_preview: true,
+    reply_markup: replyMarkup || undefined,
+  });
+}
+
+async function answerCallbackQuery(callbackQueryId, text = "") {
+  return telegramApi("answerCallbackQuery", {
+    callback_query_id: callbackQueryId,
+    text: text || undefined,
+  });
+}
+
+async function setTelegramCommands(commands) {
+  return telegramApi("setMyCommands", { commands });
+}
+
+async function getTelegramUpdates(offset = 0, timeout = 25) {
+  requireTelegramConfig();
+  const url = new URL(
+    `https://api.telegram.org/bot${config.telegram.botToken}/getUpdates`,
+  );
+  url.searchParams.set("timeout", String(timeout));
+  url.searchParams.set("offset", String(offset));
+  url.searchParams.set(
+    "allowed_updates",
+    JSON.stringify(["message", "callback_query"]),
+  );
+  const response = await fetch(url);
+  const payload = await response.json();
+  if (!payload.ok) {
+    throw new Error(`Telegram getUpdates failed: ${payload.description || response.status}`);
+  }
+  return payload.result || [];
+}
+
 module.exports = {
   formatDeepAnalysisMessage,
   formatCardCaption,
@@ -506,4 +584,9 @@ module.exports = {
   sendTelegramMessage,
   sendTelegramPhoto,
   sendTelegramTest,
+  sendTelegramMessageWithMarkup,
+  editTelegramMessage,
+  answerCallbackQuery,
+  setTelegramCommands,
+  getTelegramUpdates,
 };

@@ -252,6 +252,29 @@ async function getRecentEvents(symbol, limit = 20) {
   );
 }
 
+async function listDailySetups(symbol, { limit = 20, offset = 0 } = {}) {
+  const database = await getDb();
+  const rows = await database.all(
+    `SELECT * FROM daily_setups
+     WHERE symbol = ?
+     ORDER BY iran_date DESC, id DESC
+     LIMIT ? OFFSET ?`,
+    symbol,
+    limit,
+    offset,
+  );
+  return rows.map(parseSetupRow);
+}
+
+async function countDailySetups(symbol) {
+  const database = await getDb();
+  const row = await database.get(
+    `SELECT COUNT(*) AS total FROM daily_setups WHERE symbol = ?`,
+    symbol,
+  );
+  return Number(row?.total || 0);
+}
+
 async function getDailySetupByIranDate(symbol, iranDate) {
   const database = await getDb();
   const row = await database.get(
@@ -397,6 +420,8 @@ module.exports = {
   getDb,
   getActiveDailySetup,
   getDailySetupByIranDate,
+  listDailySetups,
+  countDailySetups,
   getLatestAnalysis,
   getLatestContent,
   getLatestSetupEvaluation,
