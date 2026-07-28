@@ -81,7 +81,11 @@ async function runDailySetup(options = {}) {
       const existing = await getDailySetupByIranDate(symbol, iranDate);
 
       if (existing && !options.force) {
-        logger.info("Daily trading plan already exists; skipping", { symbol, iranDate });
+        logger.info("Daily trading plan already exists; skipping", {
+          symbol,
+          iranDate,
+          hint: "Scheduled 03:30 cron uses force=true; boot catch-up skips duplicates",
+        });
         await saveEvent({
           symbol,
           event: "daily_setup_skip",

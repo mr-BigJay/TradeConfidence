@@ -4,7 +4,12 @@ const { closeDb } = require("./database/db");
 const logger = require("./logger");
 const { runDailySetup } = require("./services/dailySetupPipeline");
 const { runIntradayMonitor } = require("./services/intradayPipeline");
-const { IRAN_TZ } = require("./services/timeIran");
+const {
+  IRAN_TZ,
+  formatIranClock,
+  isPastIranDailyBriefTime,
+  getIranDateString,
+} = require("./services/timeIran");
 
 const args = new Set(process.argv.slice(2));
 let isRunning = false;
@@ -75,6 +80,8 @@ async function main() {
   logger.info("Starting BTC Advanced Market Intelligence Engine", {
     dailyCron: dailyExpression,
     timezone: IRAN_TZ,
+    iranNow: `${getIranDateString()} ${formatIranClock()}`,
+    pastBriefTime: isPastIranDailyBriefTime(),
     intradayEnabled,
     intradayCron: intradayEnabled
       ? buildCronExpression(config.scheduler.intervalMinutes)
@@ -91,13 +98,29 @@ async function main() {
     logger.warn("Binance WS bootstrap skipped", { error: error.message });
   }
 
-  // On boot: create today's plan once if missing. No intraday loop by default.
-  await runSafely("daily-boot", runDailySetup, { force: false });
+  // Boot catch-up ONLY after 03:30 Iran, and only if today's plan is missing.
+  // Never create the morning brief early — that used to make 03:30 cron skip with already_exists.
+  if (isPastIranDailyBriefTime()) {
+    logger.info("Boot catch-up: past 03:30 Iran; ensuring today's plan exists", {
+      iranNow: `${getIranDateString()} ${formatIranClock()}`,
+    });
+    await runSafely("daily-boot", runDailySetup, { force: false });
+  } else {
+    logger.info("Boot catch-up skipped until 03:30 Iran daily brief", {
+      iranNow: `${getIranDateString()} ${formatIranClock()}`,
+      dailyCron: dailyExpression,
+    });
+  }
 
+  // Scheduled morning brief always regenerates + sends (force), so Telegram is not skipped.
   cron.schedule(
     dailyExpression,
     () => {
-      runSafely("daily", runDailySetup, { force: false }).catch((error) => {
+      logger.info("Daily brief cron fired", {
+        iranNow: `${getIranDateString()} ${formatIranClock()}`,
+        force: true,
+      });
+      runSafely("daily-cron", runDailySetup, { force: true }).catch((error) => {
         logger.error("Scheduled daily setup failed", {
           error: error.message,
           stack: error.stack,
@@ -106,6 +129,12 @@ async function main() {
     },
     { timezone: IRAN_TZ },
   );
+
+  logger.info("Daily brief cron armed", {
+    expression: dailyExpression,
+    timezone: IRAN_TZ,
+    forceOnTick: true,
+  });
 
   if (intradayEnabled) {
     const intradayExpression = buildCronExpression(config.scheduler.intervalMinutes);

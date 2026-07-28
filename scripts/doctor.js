@@ -17,6 +17,8 @@ async function main() {
   console.log(`cwd: ${process.cwd()}`);
   console.log(`db: ${dbPath} (${fs.existsSync(dbPath) ? "exists" : "missing"})`);
   console.log(`symbols: ${config.coinex.symbols.join(", ")}`);
+  console.log(`dailyCron: ${config.scheduler.dailyCron} (${config.scheduler.timezone})`);
+  console.log(`intradayEnabled: ${config.scheduler.intradayEnabled}`);
   console.log(`intervalMinutes: ${config.scheduler.intervalMinutes}`);
   console.log(`cardMode: ${config.runtime.cardMode}`);
   console.log(`openai.baseURL: ${config.openai.baseURL || "(default)"}`);

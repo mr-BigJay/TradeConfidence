@@ -39,6 +39,17 @@ function formatIranClock(date = new Date()) {
 }
 
 /**
+ * True once today's 03:30 Asia/Tehran brief time has passed (inclusive).
+ * Used so boot catch-up does not create a plan before the daily candle close.
+ */
+function isPastIranDailyBriefTime(date = new Date(), hour = 3, minute = 30) {
+  const p = getIranParts(date);
+  if (p.hour > hour) return true;
+  if (p.hour === hour && p.minute >= minute) return true;
+  return false;
+}
+
+/**
  * Next 03:30 Asia/Tehran after the given moment, as UTC ISO.
  * Used as valid_until for a daily setup.
  */
@@ -67,5 +78,6 @@ module.exports = {
   getIranDateString,
   getIranDateDaysAgo,
   formatIranClock,
+  isPastIranDailyBriefTime,
   nextIranDailyCutoffIso,
 };
