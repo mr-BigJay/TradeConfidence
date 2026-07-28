@@ -4,6 +4,7 @@ const { closeDb } = require("./database/db");
 const logger = require("./logger");
 const { runDailySetup } = require("./services/dailySetupPipeline");
 const { runIntradayMonitor } = require("./services/intradayPipeline");
+const { runScenarioCheck } = require("./services/scenarioCheckPipeline");
 const {
   IRAN_TZ,
   formatIranClock,
@@ -66,6 +67,12 @@ async function main() {
     return;
   }
 
+  if (args.has("--scenario")) {
+    await runSafely("scenario", runScenarioCheck, options);
+    await closeDb();
+    return;
+  }
+
   // Legacy scrape-only kept for diagnostics.
   if (args.has("--scrape-only")) {
     const { runPipeline } = require("./services/pipeline");
@@ -76,12 +83,16 @@ async function main() {
 
   const dailyExpression = config.scheduler.dailyCron;
   const intradayEnabled = Boolean(config.scheduler.intradayEnabled);
+  const scenarioCheckEnabled = Boolean(config.scheduler.scenarioCheckEnabled);
+  const scenarioCheckCron = config.scheduler.scenarioCheckCron;
 
   logger.info("Starting BTC Advanced Market Intelligence Engine", {
     dailyCron: dailyExpression,
     timezone: IRAN_TZ,
     iranNow: `${getIranDateString()} ${formatIranClock()}`,
     pastBriefTime: isPastIranDailyBriefTime(),
+    scenarioCheckEnabled,
+    scenarioCheckCron: scenarioCheckEnabled ? scenarioCheckCron : "disabled",
     intradayEnabled,
     intradayCron: intradayEnabled
       ? buildCronExpression(config.scheduler.intervalMinutes)
@@ -135,6 +146,30 @@ async function main() {
     timezone: IRAN_TZ,
     forceOnTick: true,
   });
+
+  if (scenarioCheckEnabled) {
+    cron.schedule(
+      scenarioCheckCron,
+      () => {
+        logger.info("8h scenario check cron fired", {
+          iranNow: `${getIranDateString()} ${formatIranClock()}`,
+        });
+        runSafely("scenario-cron", runScenarioCheck, { force: false }).catch((error) => {
+          logger.error("Scheduled scenario check failed", {
+            error: error.message,
+            stack: error.stack,
+          });
+        });
+      },
+      { timezone: IRAN_TZ },
+    );
+    logger.info("8h scenario check cron armed", {
+      expression: scenarioCheckCron,
+      timezone: IRAN_TZ,
+    });
+  } else {
+    logger.info("8h scenario check disabled");
+  }
 
   if (intradayEnabled) {
     const intradayExpression = buildCronExpression(config.scheduler.intervalMinutes);

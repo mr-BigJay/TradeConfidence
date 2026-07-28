@@ -44,6 +44,9 @@ module.exports = {
     // Daily setup cron in Asia/Tehran (default 03:30, after daily candle close).
     dailyCron: process.env.DAILY_SETUP_CRON || "30 3 * * *",
     timezone: "Asia/Tehran",
+    // 8h scenario progress checks after morning brief (11:30 and 19:30 Iran).
+    scenarioCheckEnabled: parseBoolean(process.env.SCENARIO_CHECK_ENABLED, true),
+    scenarioCheckCron: process.env.SCENARIO_CHECK_CRON || "30 11,19 * * *",
   },
   openai: {
     apiKey: process.env.OPENAI_API_KEY,

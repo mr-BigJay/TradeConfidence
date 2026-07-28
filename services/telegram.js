@@ -486,6 +486,7 @@ module.exports = {
   formatDailyTradingPlanMessage,
   formatSetupUpdateMessage,
   applyRtlForPersian,
+  splitTelegramText,
   sendMarketStatus,
   sendDailySetup,
   sendDailyTradingPlan,
